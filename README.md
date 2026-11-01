@@ -42,32 +42,44 @@ The submission chosen by cross-validation was my best Private score among all su
 
 ### What the EDA found
 
-Full steps and plots are in [notebooks/EDA.ipynb](notebooks/EDA.ipynb) (8 sections, with outputs). The four main findings are shown with their figures below.
+Full steps and plots are in [notebooks/EDA.ipynb](notebooks/EDA.ipynb) (8 sections, with outputs). The main figures and findings are below.
 
-**Findings 1–2 → Figure 1 (Class × Type of Travel)**
+#### Figure 1: Class × Type of Travel
 
-- **Finding 1: only "business class on a business trip" is highly satisfied.** That combination is 73.2% satisfied, while personal travel is 9.5–11.2% in every class (11.2% even in business class). See the top right of Figure 1.
-- **Finding 2: most of the flight-distance effect was really a customer-segment effect.** Overall, longer flights look more satisfied (univariate AUC 0.696, using the raw distance as the score), but within the six Class × Type of Travel segments the same measure drops to 0.44–0.59. For economy business travelers, satisfaction actually falls with distance. See the bottom of Figure 1 (satisfaction by distance for each segment).
+- **Purpose:** passenger share and satisfaction for each class × travel-type combination, and how flight distance changes it
+- **Top:** vertical axis = class, horizontal axis = travel type. Left = share of passengers (%), right = satisfaction rate (redder = higher)
+- **Bottom:** vertical axis = satisfaction rate, horizontal axis = flight-distance bin. One line per combination (6 segments)
 
-![Figure 1 Class × Type of Travel](docs/img/class_x_travel.png)
+![Figure 1](docs/img/class_x_travel.png)
 
-**Finding 3 → Figure 2 (satisfaction by rating, per travel type)**
+- **Finding 1: only "business class on a business trip" is highly satisfied.** That combination is 73.2%; personal travel is 9.5–11.2% in every class (top right).
+- **Finding 2: most of the flight-distance effect is a customer-segment effect.** Overall, longer flights look more satisfied (univariate AUC 0.696 with the raw distance as the score), but within the 6 segments the same measure drops to 0.44–0.59. For economy business travelers, satisfaction falls with distance (bottom).
 
-- **Finding 3: how service ratings work depends on the segment.** Ratings such as seat comfort, in-flight entertainment and on-board service separate well for business travelers (AUC 0.72–0.79) but hardly at all for personal travelers (0.50–0.51). In Figure 2, business travelers (top row) jump to 70–85% satisfied at ratings 4–5, while personal travelers (bottom row) stay around 10% at every rating (four items shown). A gated feature built from this (ratings kept only for the segment where they matter) became the top feature by SHAP.
+#### Figure 2: Satisfaction by rating, per travel type (4 items shown)
 
-![Figure 2 Satisfaction by rating per travel type](docs/img/gate_type_of_travel.png)
+- **Purpose:** whether the same rating means the same satisfaction for business and personal travelers
+- **Each panel:** vertical axis = travel type (top = business, bottom = personal), horizontal axis = rating (0–5), number and color = satisfaction rate (%, greener = higher)
 
-**Finding 4 → Figure 3 (satisfaction of passengers who rated 0, 1 and 5)**
+![Figure 2](docs/img/gate_type_of_travel.png)
 
-- **Finding 4: a rating of 0 is not always the worst rating.** Passengers who rated in-flight Wi-Fi 0 were 88.7% satisfied, far above those who rated it 1 (39.1%). In the left of Figure 3, Wi-Fi, online booking and online boarding have a longer red bar (0) than blue bar (1), so a 0 most likely means "not used / not applicable". For seat comfort, food and similar items the red and blue bars are about the same, so 0 is used as the worst rating.
+- **Finding 3: how service ratings work depends on the segment.** Business travelers rise to 70–85% satisfied at ratings 4–5, while personal travelers stay around 10% at every rating (AUC 0.72–0.79 vs 0.50–0.51). A gated feature built from this (ratings kept only for the segment where they matter) became the top feature by SHAP.
 
-![Figure 3 Satisfaction by rating 0, 1 and 5](docs/img/rating_zero.png)
+#### Figure 3: Satisfaction of passengers who rated 0, 1 and 5
 
-**Reference → Figure 4 (univariate AUC per feature)**
+- **Purpose:** whether a 0 is the worst rating or "no rating"
+- **Left:** vertical axis = service item, horizontal axis = satisfaction rate. Bar color = rating given to that item (blue 1, red 0, green 5)
+- **Right:** horizontal axis = average rating that people who gave 0 or 1 gave to the other items
 
-- How well each feature alone separates satisfied from dissatisfied passengers (0.5 = random, 1 = perfect). Blue uses the raw value; orange uses the satisfaction rate per value.
+![Figure 3](docs/img/rating_zero.png)
 
-![Figure 4 Univariate AUC](docs/img/univariate_auc.png)
+- **Finding 4: a 0 is not always the worst rating.** For Wi-Fi, online booking and online boarding, the 0 group (red) is more satisfied than the 1 group (blue) — 88.7% vs 39.1% for Wi-Fi — so a 0 most likely means "not used". For seat comfort, food and similar items, red and blue are about the same, so 0 is the worst rating.
+
+#### Figure 4: Univariate AUC per feature
+
+- **Purpose:** which features are strong signals on their own
+- Vertical axis = feature, horizontal axis = univariate AUC (0.5 = random, 1 = perfect). Blue = raw value, orange = satisfaction rate per value
+
+![Figure 4](docs/img/univariate_auc.png)
 
 ### What worked
 
