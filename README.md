@@ -10,8 +10,14 @@ Binary classification: predict whether an airline passenger is satisfied from a 
 
 | Submission | Private LB | Public LB |
 |---|---|---|
-| **Best stack by CV (226 members + shallow LightGBM blend), selected** | **0.96239** | 0.96182 |
-| Hedge: 50/50 rank average with a public LB–tuned file, selected | 0.96236 | 0.96202 |
+| **(1) Best stack by CV (226 predictions combined into one), selected** | **0.96239** | 0.96182 |
+| (2) Hedge: (1) blended 1:1 with another participant's public LB–tuned submission file, selected | 0.96236 | 0.96202 |
+
+- **What (1) is:** 226 predictions (my five models plus OOF predictions published by other participants) are combined into one prediction by a second-level model. The second level blends two models 80:20.
+  - **Logistic regression (80%):** combines the 226 predictions as a weighted sum. Stable, but it can only add.
+  - **Shallow LightGBM (20%):** can learn conditional rules such as "when these two predictions disagree, trust this one". The trees are kept shallow (15 leaves, at least 2,000 rows per leaf) and strongly regularized to avoid overfitting. The 80:20 ratio was taken from the public example as is, because re-selecting it on my own OOF would inflate the score.
+  - Adding LightGBM improved OOF by only +0.000006, but it improved under all three fold splits, so it was kept.
+- **What (2) is:** another participant's submission file that had been tuned while watching the Public LB (Public 0.96213). It has no OOF, so it cannot be evaluated by CV. (1) and that file were each converted to prediction ranks (0–1) and averaged 0.5:0.5. The 0.5 was fixed in advance so as not to fit the Public LB. Because the final rank uses the better Private score of the two slots, I submitted one CV-trusting file (1) and one Public-LB-trusting file (2).
 
 The submission chosen by cross-validation was my best Private score among all submissions. The hedge scored higher on the Public LB but lower on the Private LB. Many teams that had submitted public LB–tuned files dropped on the Private LB.
 
@@ -26,7 +32,7 @@ The submission chosen by cross-validation was my best Private score among all su
 | Models | LightGBM, XGBoost, CatBoost, RealMLP, TabPFN | Single models 0.9608–0.9611 |
 | Hyperparameters | Optuna (LightGBM, XGBoost, CatBoost on Kaggle GPU) | LightGBM +0.00039 alone, but only +0.00005 in the blend |
 | Ensemble | Stacking with logistic regression on logits, evaluated on a separate fold split | 5-model stack 0.961685 |
-| Public OOF | Added other participants' published OOF predictions as stack members | 226 members + shallow LightGBM blend 0.962266 |
+| Public OOF | Added other participants' published OOF predictions as stack members; second level = 80% logistic regression + 20% shallow LightGBM | 226 members 0.962266 |
 
 ![Univariate AUC](docs/img/univariate_auc.png)
 
@@ -60,10 +66,10 @@ The submission chosen by cross-validation was my best Private score among all su
 ## My work vs. external resources
 
 - **Implemented myself:** EDA, all feature engineering code, the 3-seed adoption framework, LightGBM/XGBoost/CatBoost pipelines and tuning, stacking and its evaluation. The code is in `src/` and `experiments/`.
-- **Ideas taken from public notebooks and re-implemented in my own code:** original-data teacher, expected-value features, route profile, segment statistics, all-categorical CatBoost.
+- **Ideas taken from public notebooks and re-implemented in my own code:** original-data teacher, expected-value features, route profile, segment statistics, all-categorical CatBoost, and blending a shallow LightGBM into the second level (ewtherka).
 - **Reproduced from public notebooks (code not included in this repository):** the RealMLP configuration (yekenot) and the TabPFN memory workaround (hemingweb).
 - **Used as-is (not included):** published OOF predictions from about 20 Kaggle datasets (cdeotte and others) as stack members in the final submission.
-- **Final submission:** slot 1 is the best stack by CV (Private 0.96239). Slot 2 is a hedge: a 50/50 rank average of slot 1 and a public LB–tuned public submission (Private 0.96236). Slot 2 has no CV backing and did slightly worse on the Private LB.
+- **Final submission:** slot 1 is the best stack by CV (Private 0.96239). Slot 2 is a hedge: slot 1 and another participant's public LB–tuned submission file, each converted to ranks and averaged 1:1 (Private 0.96236). Slot 2 has no CV backing and did slightly worse on the Private LB.
 
 ## Lessons
 
