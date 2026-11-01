@@ -13,7 +13,7 @@ Binary classification: predict whether an airline passenger is satisfied from a 
 | **(1) Best stack by CV (226 predictions combined into one), selected** | **0.96239** | 0.96182 |
 | (2) Hedge: (1) blended 1:1 with another participant's public LB–tuned submission file, selected | 0.96236 | 0.96202 |
 
-- **What (1) is:** 226 predictions (my five models plus OOF predictions published by other participants) are combined into one prediction by a second-level model. The second level blends two models 80:20.
+- **What (1) is:** 226 predictions (five models I trained myself — LightGBM, XGBoost and CatBoost implemented by me, RealMLP and TabPFN reproduced from public notebooks — plus OOF predictions published by other participants) are combined into one prediction by a second-level model. The second level blends two models 80:20.
   - **Logistic regression (80%):** combines the 226 predictions as a weighted sum. Stable, but it can only add.
   - **Shallow LightGBM (20%):** can learn conditional rules such as "when these two predictions disagree, trust this one". The trees are kept shallow (15 leaves, at least 2,000 rows per leaf) and strongly regularized to avoid overfitting. The 80:20 ratio was taken from the public example as is, because re-selecting it on my own OOF would inflate the score.
   - Adding LightGBM improved OOF by only +0.000006, but it improved under all three fold splits, so it was kept.
@@ -35,7 +35,7 @@ The submission chosen by cross-validation was my best Private score among all su
 |---|---|---|
 | EDA | Univariate AUC per feature, cross tabs, the meaning of "0" ratings, per-segment heatmaps | Found that a rating's effect depends on the customer segment (e.g. comfort matters only for loyal business travelers) |
 | Feature engineering | LightGBM, adding one feature at a time and judging over 3 CV seeds | Raw 20 columns 0.95846 → with engineered features 0.96046 (default parameters) |
-| Models | LightGBM, XGBoost, CatBoost, RealMLP, TabPFN | Single models 0.9608–0.9611 |
+| Models | LightGBM, XGBoost, CatBoost, RealMLP, TabPFN (RealMLP and TabPFN reproduced from public notebooks) | Single models 0.9608–0.9611 |
 | Hyperparameters | Optuna (LightGBM, XGBoost, CatBoost on Kaggle GPU) | LightGBM +0.00039 alone, but only +0.00005 in the blend |
 | Ensemble | Stacking with logistic regression on logits, evaluated on a separate fold split | 5-model stack 0.961685 |
 | Public OOF | Added other participants' published OOF predictions as stack members; second level = 80% logistic regression + 20% shallow LightGBM | 226 members 0.962266 |
