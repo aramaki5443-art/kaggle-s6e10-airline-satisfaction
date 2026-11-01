@@ -1,5 +1,10 @@
 # Kaggle Playground S6E10 — Airline Passenger Satisfaction
 
+> **Summary**
+> - **What I did:** in a Kaggle competition predicting passenger satisfaction from a survey, I worked through EDA, feature engineering, five model types and stacking, and made every adopt/reject decision myself.
+> - **Result:** rank 52 of 3,748 teams (top 1.4%). I chose the final submission by CV (my own validation score) rather than the Public LB, moving from Public rank 513 to Private rank 52.
+> - **Strength:** backing decisions with verification — measuring noise before setting adoption thresholds, isolating causes with control experiments, and recording my wrong calls and a too-loose threshold as lessons.
+
 Binary classification: predict whether a passenger answered "satisfied" from a survey (age, class, type of travel, flight distance, delays and 14 service ratings on a 0–5 scale). Metric: **AUC**. The data is synthetic, generated from a real airline survey; train 699,635 rows, test 299,844 rows.
 
 日本語版: [README.ja.md](README.ja.md)
