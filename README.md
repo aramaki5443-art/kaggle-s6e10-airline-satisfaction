@@ -59,6 +59,22 @@ The submission chosen by cross-validation was my best Private score among all su
 - Stacking was evaluated on a separate 5-fold split (seed 7): the blend is learned on 4 folds and scored on the remaining one.
 - Public LB (about 60k rows) cannot distinguish differences below about 0.0003, so decisions were based on OOF (700k rows).
 
+## Where the score came from
+
+Most of the final score came from other participants' published predictions. My own models alone would have finished around rank 1,090.
+
+| Stage (Private LB) | Private | Rank (of 3,748) | Whose work |
+|---|---|---|---|
+| My own models only (5-model stack) | 0.96208 | ~1,090 | Mine (RealMLP and TabPFN reproduce public configurations) |
+| + 123 public OOF predictions (one dataset by cdeotte) | 0.96229 | ~661–673 | Mostly others' |
+| + 136 more from 20+ public libraries, near-duplicates removed | 0.96238 | ~75–224 | Collected and filtered by me; predictions by others |
+| Drop the LightGBM family (my own analysis) | 0.96237 | ~225–389 | Mine (did not help on the Private LB) |
+| + 11 newly published OOFs chosen one by one (3-seed rule) + 20% shallow LightGBM in the second stage | **0.96239** | **37–74 (52nd)** | Selection by me; the LightGBM blend follows ewtherka's notebook |
+
+- About 150 teams are tied at 0.96238. A score 0.00001 lower would have ranked between 75 and 224, so the exact rank of 52 mostly reflects tiny differences.
+- Adding my own five models on top of the 259 public members changed the OOF AUC by only +0.000004.
+- My decisions that mattered most were collecting public OOFs from many sources instead of one dataset, rejecting members with suspected leakage or weak single scores, and choosing the final submission by CV rather than by the Public LB.
+
 ## My work vs. external resources
 
 - **Implemented myself:** EDA, all feature engineering code, the 3-seed adoption framework, LightGBM/XGBoost/CatBoost pipelines and tuning, stacking and its evaluation. The code is in `src/` and `experiments/`.
