@@ -98,7 +98,7 @@ Full steps and plots are in [notebooks/EDA.ipynb](notebooks/EDA.ipynb) (8 sectio
 
 ## What worked
 
-| Measure | Trigger (evidence) | Gain (OOF AUC) | Why I think it worked |
+| Measure | Why I tried it | Gain (OOF AUC) | Why I think it worked |
 |---|---|---|---|
 | Per-value satisfaction rate of flight distance (target encoding) | Checked beforehand: using the satisfaction rate of each individual distance value gave a univariate AUC of 0.741, higher than 10 bins (0.703) or the raw value (0.696) = each value has its own satisfaction quirk | +0.00136 | Distance has only 3,474 distinct values, each behaving like a route ID with its own satisfaction quirk. A tree would need thousands of splits to learn this from the raw value. The Public LB also rose by +0.00122 (94% of the OOF gain) |
 | Gated features (ratings kept only for the segment where they matter) | EDA finding 3 (Figure 2) | +0.00005 to +0.00009 each | Ratings from personal travelers are noise, so keeping values only for the relevant segment makes them easy for trees to use. The top SHAP feature |
