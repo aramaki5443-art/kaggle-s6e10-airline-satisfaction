@@ -82,7 +82,7 @@ src/            lgb_fe_check.py(特徴量+LightGBM+3seed判定)、aux_expected_v
                 xgb_check.py、catboost_kaggle.py(KaggleのGPU)、stack_check.py(スタッキングの評価)
 experiments/    lgb_forward_add.py、lgb_optuna.py、shap_report.py
 notebooks/      EDA.ipynb(出力付き)
-docs/           review_ja.pdf(振り返りスライド51枚)、img/
+docs/           review_ja.pdf(振り返りスライド52枚)、img/
 ```
 
 ## 再現手順
