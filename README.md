@@ -98,7 +98,7 @@ src/            lgb_fe_check.py (features + LightGBM + 3-seed check), aux_expect
                 xgb_check.py, catboost_kaggle.py (Kaggle GPU), stack_check.py (stacking evaluation)
 experiments/    lgb_forward_add.py, lgb_optuna.py, shap_report.py
 notebooks/      EDA.ipynb (with outputs)
-docs/           review_ja.pdf (Japanese slide deck, 52 slides), img/
+docs/           review_ja.pdf (Japanese slide deck, 53 slides), img/
 ```
 
 ## Reproduce
