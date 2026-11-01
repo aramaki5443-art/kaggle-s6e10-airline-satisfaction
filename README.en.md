@@ -203,7 +203,7 @@ src/            lgb_fe_check.py (features + LightGBM + three-seed judgment), aux
                 xgb_check.py, catboost_kaggle.py (Kaggle GPU), stack_check.py (stacking evaluation)
 experiments/    lgb_forward_add.py, lgb_optuna.py, shap_report.py
 notebooks/      EDA.ipynb (with outputs)
-docs/           review_ja.pdf (52-slide review deck, Japanese), img/ (figures; *_en.png are English versions), make_figures_en.py
+docs/           review_ja.pdf (47-slide review deck, Japanese), img/ (figures; *_en.png are English versions), make_figures_en.py
 ```
 
 ## How to reproduce
