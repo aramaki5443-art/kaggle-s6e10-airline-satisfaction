@@ -4,7 +4,7 @@
 ひとことで言うと: 「単独で一番当たる特徴量」から順にモデルへ1つずつ渡し、伸びが止まる所を探す。
 やり方:
   - 特徴量の順番は、EDA.ipynb 6節の単変量AUC(値ごとの満足率をスコアにしたもの)の高い順で固定(ORDER)。
-  - `--n N` で上位N個を使い、project.jsonのcv設定(現在5fold、StratifiedKFold seed42)でLightGBMを学習してOOF AUCを出す。
+  - `--n N` で上位N個を使い、cfgのfold設定(5fold、StratifiedKFold seed42)でLightGBMを学習してOOF AUCを出す。
     OOF(Out-Of-Fold)= 各行を「その行を学習に使っていないモデル」で予測した値。全行分そろえて評価する。
   - ハイパラは既定値に近いまま(learning_rate 0.05 + early stopping 100のみ設定)。
     feature_fraction(列の間引き)は既定の1.0なので、列数が変わっても木の抽選パターンが変わる副作用は無い。
@@ -37,7 +37,9 @@ ap.add_argument("--n", type=int, required=True, help="ORDERの上位何個を使
 ap.add_argument("--predict", action="store_true", help="testを予測してdata/submission.csvを作る")
 args = ap.parse_args()
 
-cfg = json.load(open(".claude/project.json", encoding="utf-8"))
+# データの置き場所・列名・foldの分け方(リポジトリのルートで実行する前提)
+cfg = {"train_csv": "data/train.csv", "test_csv": "data/test.csv", "id_col": "id", "target_col": "satisfaction",
+       "cv": {"n_splits": 5, "seed": 42}}
 train = pd.read_csv(cfg["train_csv"])
 y = train[cfg["target_col"]].astype(int).values
 feats = ORDER[: args.n]

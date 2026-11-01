@@ -1,23 +1,24 @@
-"""CatBoostをKaggleのGPUで学習し、OOFとtestの予測を保存する(仮説検証結果#176〜、チェックシート#22)。
+"""CatBoostをKaggleのGPUで学習し、OOFとtestの予測を保存する。
 
 目的: RealMLP+LightGBMのアンサンブルに、3つ目の木のモデルとしてCatBoostを足す価値があるかを調べる。
 ひとことで言うと: LightGBMと同じ36列を、カテゴリ列の扱い方が違うCatBoostに学習させ、違う予測になるかを見る。
 やり方:
-  - 特徴量は手元のlgb_fe_check.pyで作った36列(データセットs6e10-fe36、build_fe36.pyで作成)。TEの2列(距離・距離×Class)だけは
+  - 特徴量はlgb_fe_check.pyの採用済みの列(`python src/lgb_fe_check.py --fe none --export-fe`でdata/fe36_*.csvに書き出す。
+    Kaggleで動かすときは、このCSVをデータセットとして読み込ませる)。TEの2列(距離・距離×Class)だけは
     キーのまま受け取り、foldごとに計算する(te_fold・te_mapはlgb_fe_check.pyと同一)。
   - Class・Type of Travel・Customer TypeはCatBoostのカテゴリ列として渡す(CatBoost独自の、答えを順番に使う集計で数値化される)。
   - 学習率0.05、木の本数は検証foldでの早期停止(100本)で決める(LightGBM・XGBoostの判定と同じ条件)。ほかは既定(depth 6等)。
   - RUNSの各行(タグ, fold分割のseed, 生の20列だけか, 上書きするハイパラ, 距離の扱い)を順に学習し、oof_cat_<タグ>.npy・test_cat_<タグ>.npyを保存。
-  - 距離の扱い(#177): None=数値のまま。"add"=数値の列は残し、同じ値の文字列コピーdist_catをカテゴリ列として足す。
+  - 距離の扱い: None=数値のまま。"add"=数値の列は残し、同じ値の文字列コピーdist_catをカテゴリ列として足す。
     "rep"=Flight Distanceの数値列そのものをカテゴリ列に置き換える。このコンペで一番効いたのは距離を路線IDとして扱うこと
     (TEの2列)なので、CatBoost独自のカテゴリ処理(答えを行の順番に使う集計+カテゴリ同士の組み合わせ)で距離を扱えば、
     LightGBMのTEとは違う予測になる可能性がある。
-    "allcat"(#178)=生の20列(数値・評価・カテゴリ)を全て文字列にしてカテゴリ列に置き換える(作り込み16列・TEはそのまま)。
-    公開ノートブック(goodpjw2008、Notebooks#35)で全列カテゴリ化+自前TEなしが単体+0.00015。まず「全列カテゴリ化」だけを切り分ける。
-    "allcat_note"(#179)=allcatに加えてTEの2列を外す(allcatとの差がTEを外した効果)。
-  - ローカル実行(#178〜): /kaggle/inputが無ければdata/fe36_*.csvを読み、CPU(8スレッド)で学習してdata/に保存する。
+    "allcat"=生の20列(数値・評価・カテゴリ)を全て文字列にしてカテゴリ列に置き換える(作り込み16列・TEはそのまま)。
+    公開ノートブックで全列カテゴリ化+自前TEなしが単体+0.00015。まず「全列カテゴリ化」だけを切り分ける。
+    "allcat_note"=allcatに加えてTEの2列を外す(allcatとの差がTEを外した効果)。
+  - ローカル実行: /kaggle/inputが無ければdata/fe36_*.csvを読み、CPU(8スレッド)で学習してdata/に保存する。
     GPUとCPUではCatBoostの計算(境界の作り方等)が違うので、比較の基準もCPUで学習し直す。
-なぜ: 木のモデル同士は予測が似やすい(#172でXGBoostは「もう1本のLightGBM」程度)。CatBoostはカテゴリ列の扱いと木の形
+なぜ: 木のモデル同士は予測が似やすい(XGBoostは「もう1本のLightGBM」程度)。CatBoostはカテゴリ列の扱いと木の形
   (左右対称の木)が違うため、XGBoostより違う予測になる可能性がある。
 """
 import glob
@@ -31,7 +32,7 @@ from catboost import CatBoostClassifier
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold
 
-# Optunaの最良(#181、試行#21)。3seedの確認(調整前のallcatとseed0・1で比べる)と、アンサンブル用のtest予測を作る
+# Optunaの最良(試行#21)。3seedの確認(調整前のallcatとseed0・1で比べる)と、アンサンブル用のtest予測を作る
 T21 = dict(depth=7, l2_leaf_reg=24.86317046031032, border_count=254, random_strength=0.17142049132377946,
            bagging_temperature=0.4171977018905056, max_ctr_complexity=4)
 RUNS = [("allcat_t21_cv42", 42, False, T21, "allcat"), ("allcat_t21_cv0", 0, False, T21, "allcat"),
@@ -73,7 +74,7 @@ summary = []
 for tag, cv_seed, raw_only, over, dist in RUNS:
     X, Xt = (train.iloc[:, :RAW_N], test.iloc[:, :RAW_N]) if raw_only else (train, test)
     cats = [c for c in CAT if c in X]
-    if dist == "allcat_note":  # 全列カテゴリ化に加え、自前のTE2列を外してCatBoost独自の集計だけに任せる(#179)
+    if dist == "allcat_note":  # 全列カテゴリ化に加え、自前のTE2列を外してCatBoost独自の集計だけに任せる
         X, Xt = X.drop(columns=list(TE)), Xt.drop(columns=list(TE))
     if dist in ("allcat", "allcat_note"):  # 生の20列を全てカテゴリ列に(欠損は"-1"の文字列。pandasのstr型は欠損をNaNのまま残すため先に埋める)
         raw = list(X.columns[:RAW_N])

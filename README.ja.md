@@ -213,6 +213,7 @@ uv sync
 # コンペのページからtrain.csvとtest.csvをdata/に置く
 python src/lgb_fe_check.py --help          # 各スクリプト冒頭のdocstringに目的と使い方を書いています
 python src/aux_expected_value.py --col "Online boarding" --name boarding
+python src/lgb_fe_check.py --fe none --export-fe   # catboost_kaggle.pyの入力(data/fe36_*.csv)を書き出す
 ```
 
 スクリプトはリポジトリのルートで実行します。

@@ -1,6 +1,6 @@
-"""LightGBMのハイパラをOptunaで複数同時に探す(仮説検証結果#170、チェックシート#23〜#25)。
+"""LightGBMのハイパラをOptunaで複数同時に探す。
 
-目的: 1つずつのグリッドサーチ(#168、num_leavesは31が最良)では、パラメータどうしの組み合わせ効果(例: 葉を増やすなら
+目的: 1つずつのグリッドサーチ(num_leavesは31が最良)では、パラメータどうしの組み合わせ効果(例: 葉を増やすなら
   葉の最少人数も増やす)を見逃すため、8つを同時に探す。
 ひとことで言うと: 過去の試行の結果から「次はこのあたりが良さそう」と推測しながら、値の組み合わせを50通りほど試す。
 やり方:
@@ -11,7 +11,7 @@
   - 見込みのない試行は、途中のfoldまでの平均AUCが過去の試行の中央値より低ければ打ち切る(MedianPruner)。
   - 結果はdata/optuna_lgb.db(SQLite)に保存し、再実行すると続きから回る。
 なぜ: seed42のfold分割に合わせ込んだだけの設定を拾わないよう、上位の設定は後で3seed(42・0・1)で既定と比べる。
-結果(#170): 50試行の最良#14(num_leaves 61・min_child_samples 5・lambda_l2 29.3・lambda_l1 0.34・min_split_gain 0.35・
+結果: 50試行の最良#14(num_leaves 61・min_child_samples 5・lambda_l2 29.3・lambda_l1 0.34・min_split_gain 0.35・
   max_bin 511・subsample 0.90・colsample 0.51)が3seed平均+0.000319。学習率0.02で+0.000388(0.01は0.02と見分けられず)。
 """
 import argparse
@@ -35,7 +35,9 @@ ap.add_argument("--n-trials", type=int, default=50)
 ap.add_argument("--study", default="lgb_c33_v1")
 args = ap.parse_args()
 
-cfg = json.load(open(".claude/project.json", encoding="utf-8"))
+# データの置き場所・列名・foldの分け方(リポジトリのルートで実行する前提)
+cfg = {"train_csv": "data/train.csv", "test_csv": "data/test.csv", "id_col": "id", "target_col": "satisfaction",
+       "cv": {"n_splits": 5, "seed": 42}}
 train = pd.read_csv(cfg["train_csv"])
 y = train[cfg["target_col"]].astype(int).values
 X = pd.concat([train[g["BASE"]]] + [g["FE"][a](train) for a in g["ADOPTED"]], axis=1)

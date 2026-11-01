@@ -213,6 +213,7 @@ uv sync
 # Download train.csv and test.csv from the competition page into data/
 python src/lgb_fe_check.py --help          # each script's docstring explains its purpose and usage
 python src/aux_expected_value.py --col "Online boarding" --name boarding
+python src/lgb_fe_check.py --fe none --export-fe   # writes data/fe36_*.csv, the input of catboost_kaggle.py
 ```
 
 Run scripts from the repository root.

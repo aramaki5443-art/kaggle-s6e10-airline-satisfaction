@@ -1,4 +1,4 @@
-"""XGBoostをLightGBMと同じ特徴量で学習し、ブレンドに足す価値があるかを診断する(仮説検証結果#172〜#174、チェックシート#21)。
+"""XGBoostをLightGBMと同じ特徴量で学習し、ブレンドに足す価値があるかを診断する。
 
 目的: 調整後のLightGBM+RealMLPのブレンドに、3つ目のモデルとしてXGBoostを足すと伸びるかを、特徴量選びに時間をかける前に確かめる。
 ひとことで言うと: 「同じ材料(36列)で別の料理人(XGBoost)に作らせたら、今の2人と違う味になるか」を1回だけ試す。
@@ -8,7 +8,7 @@
     決める(LightGBMの判定と同じ条件。0.3だと1本ごとの変化が大きく、判定がぶれやすいため)。
   - fold分割はseed42の5fold(--cv-seedで変更可)。OOFをdata/oof_xgb_<tag>.npyに保存し、ブレンドの診断は別に行う。
   - --predictで各foldのモデルでtestを予測して平均し、data/test_xgb_<tag>.npyに保存する(アンサンブル用、lgb_fe_check.pyと同じやり方)。
-なぜ: GBDT同士は予測が似やすく(前コンペでGBDT3種の相関0.998以上)、単体が良くてもブレンドが伸びないことがある(得られた知見#13)。
+なぜ: GBDT同士は予測が似やすく(前コンペでGBDT3種の相関0.998以上)、単体が良くてもブレンドが伸びないことがある。
 """
 import argparse
 import json
@@ -29,16 +29,18 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--cv-seed", type=int, default=42)
 ap.add_argument("--tag", default="base")
 ap.add_argument("--params", default=None, help="既定の一部を置き換える(JSON)")
-ap.add_argument("--adopted", default=None, help="使うFEをカンマ区切りで置き換える(空文字なら生の20列だけ。特徴量の違いで多様性が増えるかの確認用、#173)")
+ap.add_argument("--adopted", default=None, help="使うFEをカンマ区切りで置き換える(空文字なら生の20列だけ。特徴量の違いで多様性が増えるかの確認用)")
 ap.add_argument("--predict", action="store_true", help="testも予測して保存する")
-ap.add_argument("--fe", default=None, help="ADOPTEDに1つ足すFE(lgb_fe_check.pyのFEの名前。XGBoost向けの特徴量選び、#174〜)")
+ap.add_argument("--fe", default=None, help="ADOPTEDに1つ足すFE(lgb_fe_check.pyのFEの名前。XGBoost向けの特徴量選び)")
 args = ap.parse_args()
 if args.adopted is not None:
     g["ADOPTED"] = [a for a in args.adopted.split(",") if a]
 if args.fe:
     g["ADOPTED"] = g["ADOPTED"] + [args.fe]
 
-cfg = json.load(open(".claude/project.json", encoding="utf-8"))
+# データの置き場所・列名・foldの分け方(リポジトリのルートで実行する前提)
+cfg = {"train_csv": "data/train.csv", "test_csv": "data/test.csv", "id_col": "id", "target_col": "satisfaction",
+       "cv": {"n_splits": 5, "seed": 42}}
 train = pd.read_csv(cfg["train_csv"])
 y = train[cfg["target_col"]].astype(int).values
 X = pd.concat([train[g["BASE"]]] + [g["FE"][a](train) for a in g["ADOPTED"]], axis=1)

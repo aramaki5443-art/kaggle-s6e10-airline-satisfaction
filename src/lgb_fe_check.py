@@ -11,7 +11,7 @@
   - `--orig`: 元データ(人工データの元になった実在の満足度データ、約13万行、data/original/)を各foldの学習用の行にだけ足す。
     検証用の行はコンペのデータのままなので、OOFは今までと同じ物差しで比べられる。元データの行もTEの満足率の計算に入る。
   - `--shap N`: fold0だけ学習し、検証foldからN行を抜き出してSHAP値(各列が予測をどれだけ押し上げ/押し下げたか)を
-    LightGBM内蔵のTreeSHAP(pred_contrib)で計算し、data/shap_lgb_<tag>.npzに保存して終わる(チェックシート#19、図はshap_report.py)。
+    LightGBM内蔵のTreeSHAP(pred_contrib)で計算し、data/shap_lgb_<tag>.npzに保存して終わる(図はshap_report.py)。
 実行: python src/lgb_fe_check.py --fe zero_flags
 """
 import argparse
@@ -72,7 +72,7 @@ def svc_std(d):
 
 
 def svc_std_business(d):
-    # 出張客だけ評価の標準偏差、私用客は欠損(得られた知見#3: 集計値にゲートを付けた型。ゲートなし#108は不採用)
+    # 出張客だけ評価の標準偏差、私用客は欠損(集計値にゲートを付けた型。ゲートなしは不採用)
     return pd.DataFrame({"svc_std_business": svc_std(d)["svc_std"].where(d["Type of Travel"] == "Business travel")})
 
 
@@ -104,7 +104,7 @@ def dist_div_comfort(d):
 
 
 def dist_x_comfort_business(d):
-    # 出張客だけ飛行距離×快適さ、私用客は欠損(ゲートなしの掛け算#30は効かなかったため、ゲートと組み合わせて再確認)
+    # 出張客だけ飛行距離×快適さ、私用客は欠損(ゲートなしの掛け算は効かなかったため、ゲートと組み合わせて再確認)
     v = d["Flight Distance"] * comfort(d)
     return pd.DataFrame({"dist_x_comfort_business": v.where(d["Type of Travel"] == "Business travel")})
 
@@ -115,14 +115,14 @@ def dist_x_baggage(d):
 
 
 def dist_x_baggage_business(d):
-    # 出張客だけ飛行距離×手荷物、私用客は欠損(全員の掛け算#39は-0.00005。私用客の値が混ざるのを除く)
+    # 出張客だけ飛行距離×手荷物、私用客は欠損(全員の掛け算は-0.00005。私用客の値が混ざるのを除く)
     v = d["Flight Distance"] * d["Baggage handling"]
     return pd.DataFrame({"dist_x_baggage_business": v.where(d["Type of Travel"] == "Business travel")})
 
 
 def baggage_longhaul(d):
     # 長距離(1189マイル超)だけ手荷物の評価、それ以外は欠損。距離との関係が段差型(1189マイル以下は手荷物の
-    # 単変量AUC 0.60前後で横ばい、超えると0.72〜0.82)なので、掛け算(#39・#40)ではなく段差の形で渡す
+    # 単変量AUC 0.60前後で横ばい、超えると0.72〜0.82)なので、掛け算ではなく段差の形で渡す
     return pd.DataFrame({"baggage_longhaul": d["Baggage handling"].where(d["Flight Distance"] > 1189)})
 
 
@@ -154,7 +154,7 @@ def gate_loyal_business(col):
 
 
 def svc3_gate_loyal_business(d):
-    # 常連かつ出張客だけ、清潔さ・機内サービス・食事の平均(0を除く)、他は欠損。単項目のゲート(#118〜#120)は木が分岐で
+    # 常連かつ出張客だけ、清潔さ・機内サービス・食事の平均(0を除く)、他は欠損。単項目のゲートは木が分岐で
     # 作れて不採用だったが、平均(集計値)は作りにくく、快適さの平均(comfort_gate_loyal_business)では効いたため同じ型で試す
     m = (d["Type of Travel"] == "Business travel") & (d["Customer Type"] == "Loyal Customer")
     v = d[["Cleanliness", "On-board service", "Food and drink"]].replace(0, np.nan).mean(axis=1)
@@ -198,7 +198,7 @@ def gate_where(name, col, gate_col, gate_val):
 
 def disloyal_age31_36(d):
     # disloyal客かつ31〜36歳のフラグ。この帯だけ満足率2〜4%と極端に低く(前後は13〜19%)、
-    # ゲートの網羅チェック(仮説検証結果#64)で唯一|z|>3の残差(予測が0.8ポイント高い)が残っていた
+    # ゲートの網羅チェックで唯一|z|>3の残差(予測が0.8ポイント高い)が残っていた
     m = (d["Customer Type"] == "disloyal Customer") & d["Age"].between(31, 36)
     return pd.DataFrame({"disloyal_age31_36": m.astype(int)})
 
@@ -211,7 +211,7 @@ TE = {"te_distance": ("Flight Distance", 20),
       "te_age": ("Age", 3),
       "te_dist_class": (["Flight Distance", "Class"], 3), "te_age_dist": (["Age", "Flight Distance"], 3),
       "te_dist_travel": (["Flight Distance", "Type of Travel"], 3),
-      # 評価2つの組み合わせ(6×6=36通り)。78ペアのうち「組み合わせのTEの単変量AUC − 単独で強い方」が大きい上位3つ(仮説検証結果#115〜)
+      # 評価2つの組み合わせ(6×6=36通り)。78ペアのうち「組み合わせのTEの単変量AUC − 単独で強い方」が大きい上位3つ
       "te_wifi_gate": (["Inflight wifi service", "Gate location"], 3),
       "te_time_gate": (["Departure/Arrival time convenient", "Gate location"], 3),
       "te_wifi_time": (["Inflight wifi service", "Departure/Arrival time convenient"], 3),
@@ -219,7 +219,7 @@ TE = {"te_distance": ("Flight Distance", 20),
       "te_svc13": (SVC, 3),
       "te_age_class": (["Age", "Class"], 3), "te_age_travel": (["Age", "Type of Travel"], 3),
       "te_ctc": (["Class", "Type of Travel", "Customer Type"], 3), "te_class_wifi": (["Class", "Inflight wifi service"], 3),
-      "te_wifi_boarding": (["Inflight wifi service", "Online boarding"], 3)}  # 年齢×カテゴリ(#156、不採用)  # 組み合わせのTE: 複数の列の値をつなげた1つのキーごとの満足率  # mの比較用
+      "te_wifi_boarding": (["Inflight wifi service", "Online boarding"], 3)}  # 年齢×カテゴリ(不採用)  # 組み合わせのTE: 複数の列の値をつなげた1つのキーごとの満足率  # mの比較用
 
 
 def te_key(name):
@@ -258,13 +258,13 @@ def te_fold(Xtr, ytr, others, seed):
 
 def dist_cat(d):
     # Exact Value Encoding: 飛行距離の値そのものをカテゴリ(category型)として渡す。LightGBMは値ごとの満足率の順に
-    # 並べ替えて分岐するため、TE(#67)と同じ「値ごとのクセ」を、満足率を自分で計算せずに木へ直接渡せる
+    # 並べ替えて分岐するため、TEと同じ「値ごとのクセ」を、満足率を自分で計算せずに木へ直接渡せる
     return pd.DataFrame({"dist_cat": d["Flight Distance"].astype("category")})
 
 
 def freq(name, cols):
     # Frequency Encoding: colsの値(の組み合わせ)がtrain+testに何回出てくるか(目的変数は使わない)。
-    # 残差との相関はほぼ0でも学習すると効くことがある(仮説検証結果#81・#82)ため、事前確認で落とさず学習で確かめる
+    # 残差との相関はほぼ0でも学習すると効くことがあるため、事前確認で落とさず学習で確かめる
     def f(d):
         # usecolsはCSVの列順で返すため、colsの順に並べ直してキーの文字列をそろえる
         both = pd.concat([pd.read_csv(fn, usecols=cols)[cols] for fn in ("data/train.csv", "data/test.csv")])
@@ -294,7 +294,7 @@ PREPROC = {
 
 
 _TEACHER = {}  # 元データで学習したモデル(設定ごとに1回だけ作って使い回す)
-# 公開ノートブック(evgendvorkin、Notebooks#1)の教師の設定。600本固定・深さ8・列の抽選0.5・正則化(L2 5、L1 0.05)。
+# 公開ノートブックの教師の設定。600本固定・深さ8・列の抽選0.5・正則化(L2 5、L1 0.05)。
 # subsampleはsubsample_freqが無いとLightGBMでは効かないため、同ノートブックと同じく実質なし
 TEACHER_PUB = dict(objective="binary", n_estimators=600, learning_rate=0.05, max_depth=8, min_child_samples=20,
                    subsample=0.8, colsample_bytree=0.5, reg_lambda=5.0, reg_alpha=0.05, random_state=123, verbose=-1)
@@ -302,9 +302,9 @@ TEACHER_PUB = dict(objective="binary", n_estimators=600, learning_rate=0.05, max
 
 def orig_teacher_fe(name, params=None):
     # 元データ(ノイズが少なく、生の20列だけでAUC 0.995)だけで学習したLightGBMの予測を1列として渡す。元データを
-    # 行として足す方法(#107)は悪化したが、公開ノートブック3件(Notebooks#1・#3・#5)で予測を列にする方法は
+    # 行として足す方法は悪化したが、公開ノートブック3件で予測を列にする方法は
     # +0.00055〜+0.00072。教師モデルはコンペのラベルを一切見ないため、foldの外で作ってもリークにならない。
-    # params=None: 既定ハイパラ(PARAMS)で、元データの20%で早期終了して本数を決め全体に学習し直す(#123)
+    # params=None: 既定ハイパラ(PARAMS)で、元データの20%で早期終了して本数を決め全体に学習し直す
     def f(d):
         if name not in _TEACHER:
             o = pd.concat([pd.read_csv(f"data/original/{f}.csv") for f in ("train", "test")], ignore_index=True)
@@ -330,9 +330,9 @@ def orig_teacher_fe(name, params=None):
 
 
 def orig_rate(d, m=10, cols=None):
-    # 生の20列それぞれについて、元データでの「その値の人の満足率」を1列ずつ渡す(+20列、evgendvorkin氏Notebooks#1の`org`)。
+    # 生の20列それぞれについて、元データでの「その値の人の満足率」を1列ずつ渡す(+20列、公開ノートブックの`org`)。
     # 先生役(1つのモデルの確信)と違い、列ごとの単純な平均なので強い確信を持ち込みにくい。先生役と同じくPublicで
-    # 下がるかを確かめる(#129の続き)。少数の値の極端な率を抑えるため全体の満足率へm件分寄せる。元データに無い値は欠損
+    # 下がるかを確かめる。少数の値の極端な率を抑えるため全体の満足率へm件分寄せる。元データに無い値は欠損
     o = pd.concat([pd.read_csv(f"data/original/{f}.csv") for f in ("train", "test")], ignore_index=True)
     yo = (o["satisfaction"] == "satisfied").astype(int)
     out = {}
@@ -341,15 +341,15 @@ def orig_rate(d, m=10, cols=None):
         rate = (s["sum"] + m * yo.mean()) / (s["count"] + m)
         out[f"org_{c}"] = d[c].map(rate).astype(float)
     return pd.DataFrame(out, index=d.index)
-# 26列の上では20列版は悪化(#131)。評価・カテゴリは値の種類が少なく木が元の列で分けられ、飛行距離は既存のTEと重なるため、
+# 26列の上では20列版は悪化。評価・カテゴリは値の種類が少なく木が元の列で分けられ、飛行距離は既存のTEと重なるため、
 # 値の種類が多く既存のFEと重ならない年齢・遅延の3列だけに絞る
 ORIG_RATE_NUM3 = ["Age", "Departure Delay in Minutes", "Arrival Delay in Minutes"]
 
 
 def route_mean(name, col):
-    # ルートプロファイル(Notebooks#15・Discussion#3): 飛行距離の値を「路線」とみなし、train+testで同じ距離の乗客の
+    # ルートプロファイル(公開ノートブック・Discussion): 飛行距離の値を「路線」とみなし、train+testで同じ距離の乗客の
     # colの平均を列にする(目的変数は使わない)。距離のTE(採用済み)は路線の満足率そのものだが、こちらは路線の
-    # 「乗客の顔ぶれ・評価の傾向」で、少人数の路線でもラベルのぶれを含まない。路線の人数(=freq_dist、#86)は不採用済み
+    # 「乗客の顔ぶれ・評価の傾向」で、少人数の路線でもラベルのぶれを含まない。路線の人数(=freq_dist)は不採用済み
     def f(d):
         both = pd.concat([pd.read_csv(fn, usecols=["Flight Distance", col]) for fn in ("data/train.csv", "data/test.csv")])
         return pd.DataFrame({name: d["Flight Distance"].map(both.groupby("Flight Distance")[col].mean()).values}, index=d.index)
@@ -357,8 +357,8 @@ def route_mean(name, col):
 
 
 def eq_flag(name, pairs):
-    # 評価の一致フラグ(#153、4種とも不採用): 2つの評価の点数が等しいか。時刻の便利さとゲートの場所は、点数が等しいと満足率54〜69%、
-    # 違うと7〜36%(#150)。木は生の2列から『等しい』を作るのに対角線を何度も分ける必要があるので、1列で渡す。
+    # 評価の一致フラグ(4種とも不採用): 2つの評価の点数が等しいか。時刻の便利さとゲートの場所は、点数が等しいと満足率54〜69%、
+    # 違うと7〜36%。木は生の2列から『等しい』を作るのに対角線を何度も分ける必要があるので、1列で渡す。
     # pairsが複数なら、等しいペアの数
     def f(d):
         return pd.DataFrame({name: sum((d[a] == d[b]).astype(int) for a, b in pairs)}, index=d.index)
@@ -366,7 +366,7 @@ def eq_flag(name, pairs):
 
 
 def route_share(name, col, val):
-    # 路線(飛行距離の値)ごとの、colがvalである乗客の割合(train+test、目的変数不使用)(#154、3つとも不採用)。距離×Class・距離×旅行目的のTE・回数は
+    # 路線(飛行距離の値)ごとの、colがvalである乗客の割合(train+test、目的変数不使用)(3つとも不採用)。距離×Class・距離×旅行目的のTE・回数は
     # 採用済みだが、こちらは路線の客層(ビジネス客の多い路線か)
     def f(d):
         both = pd.concat([pd.read_csv(fn, usecols=["Flight Distance", col]) for fn in ("data/train.csv", "data/test.csv")])
@@ -376,7 +376,7 @@ def route_share(name, col, val):
 
 
 def route_std(name, col):
-    # 路線ごとの評価の標準偏差(train+test、#155、Wi-Fiを採用)。路線平均(rp_)が同じでも、評価がそろった路線とばらけた路線を区別する
+    # 路線ごとの評価の標準偏差(train+test、Wi-Fiを採用)。路線平均(rp_)が同じでも、評価がそろった路線とばらけた路線を区別する
     def f(d):
         both = pd.concat([pd.read_csv(fn, usecols=["Flight Distance", col]) for fn in ("data/train.csv", "data/test.csv")])
         return pd.DataFrame({name: d["Flight Distance"].map(both.groupby("Flight Distance")[col].std()).values}, index=d.index)
@@ -384,11 +384,11 @@ def route_std(name, col):
 
 
 def ctx_dev(name, keys, nums=None, z=False):
-    # 背景グループ統計(Notebooks#17、#152でClass×旅行目的×顧客タイプ版を採用)の「行の値−グループ平均」だけを取り出した版。keysで乗客をグループ分けし
+    # 背景グループ統計(公開ノートブックでClass×旅行目的×顧客タイプ版を採用)の「行の値−グループ平均」だけを取り出した版。keysで乗客をグループ分けし
     # (例: Class×旅行目的×顧客タイプの12グループ)、年齢・距離・遅延2列がグループの中で高いか低いかを4列で渡す。
     # グループ平均・標準偏差そのものはグループ(=既存の列の組み合わせ)ごとに一定で木が作れるため、ここでは偏差だけ。
     # 平均はtrain+testで計算(目的変数は使わない)
-    # nums: 偏差を取る列(既定は年齢・距離・遅延2列)。z=True: グループの標準偏差で割る(グループごとに散らばりが違っても同じ物差しにする、#162で不採用)
+    # nums: 偏差を取る列(既定は年齢・距離・遅延2列)。z=True: グループの標準偏差で割る(グループごとに散らばりが違っても同じ物差しにする、不採用)
     nums = nums or {"age": "Age", "dist": "Flight Distance", "dep": "Departure Delay in Minutes", "arr": "Arrival Delay in Minutes"}
     def f(d):
         both = pd.concat([pd.read_csv(fn, usecols=keys + list(nums.values())) for fn in ("data/train.csv", "data/test.csv")])
@@ -413,7 +413,7 @@ def route_zero(name, col, kind):
 
 
 def aux_ev(name):
-    # 期待値の列(Notebooks#4): aux_expected_value.pyで作った「他の列から予想したこの項目の点数」(train+testの順に保存)。
+    # 期待値の列(公開ノートブックのアイデア): aux_expected_value.pyで作った「他の列から予想したこの項目の点数」(train+testの順に保存)。
     # trainとtestで行数が違うので、渡された行数で切り分ける
     def f(d):
         ev = np.load(f"data/aux_ev_{name[3:]}.npy")
@@ -423,7 +423,7 @@ def aux_ev(name):
 
 
 def route_diff(name, col):
-    # 自分の評価−路線平均(Notebooks#1・#2): 路線平均(route_mean、rp_legroomで採用)は路線の乗客の傾向だが、こちらは
+    # 自分の評価−路線平均(公開ノートブックのアイデア): 路線平均(route_mean、rp_legroomで採用)は路線の乗客の傾向だが、こちらは
     # 「この路線の乗客の中で、この人は甘いか辛いか」。木は生の評価と路線平均の2列を分岐で引き算できないので新しい情報になりうる
     def f(d):
         m = route_mean("_m", col)(d)["_m"]
@@ -432,7 +432,7 @@ def route_diff(name, col):
 
 
 def digits(name, col):
-    # 桁の特徴量(Notebooks#1・#2・#15): 値の各桁 floor(x/10^k)%10(k=0〜3、値が1種類しかない桁は除く)。人工データの生成で
+    # 桁の特徴量(公開ノートブックのアイデア): 値の各桁 floor(x/10^k)%10(k=0〜3、値が1種類しかない桁は除く)。人工データの生成で
     # 「末尾が0の距離」のような桁のクセが残っていれば、木が生の値の大小の分岐では作れない区別(例: 末尾が0の値をまとめる)を渡せる。
     # 欠損(到着遅延)は欠損のまま(0で埋めると遅延0分と混ざるため)
     def f(d):
@@ -443,7 +443,7 @@ def digits(name, col):
 
 
 def digit1(name, col, k):
-    # 桁を1つだけ足す版(仮説検証結果#137で元の列ごとにまとめて入れたら全て不採用だったため、効く桁が他の桁の入場料で
+    # 桁を1つだけ足す版(元の列ごとにまとめて入れたら全て不採用だったため、効く桁が他の桁の入場料で
     # 打ち消されていないかを1桁ずつ確かめる)。定義はdigitsと同じ
     def f(d):
         return pd.DataFrame({name: np.floor(d[col].astype(float) / 10 ** k) % 10}, index=d.index)
@@ -451,7 +451,7 @@ def digit1(name, col, k):
 
 
 def gpt2_token(name, col):
-    # GPT-2トークンキー(Notebooks#16): 値を' '+文字列にしてGPT-2の区切り方でトークンに分ける(例: 694→' 6'+'94'、460→' 460')。
+    # GPT-2トークンキー(公開ノートブックのアイデア): 値を' '+文字列にしてGPT-2の区切り方でトークンに分ける(例: 694→' 6'+'94'、460→' 460')。
     # 人工データの生成器が数値を文字のかたまりごとに作っていれば、区切れ方のクセ(例: 末尾が'94'の値)が満足率に残る可能性がある。
     # 列: 先頭トークンID・末尾トークンID+100000×トークン数・トークン数(投稿者の定義どおり)
     def f(d):
@@ -467,7 +467,7 @@ def gpt2_token(name, col):
 
 
 def age_div_dist(d):
-    # 年齢÷飛行距離(チェックシート#12の残り、#165で不採用)。到着遅延÷距離は保留(+0.000018)
+    # 年齢÷飛行距離(不採用)。到着遅延÷距離は保留(+0.000018)
     return pd.DataFrame({"age_div_dist": d["Age"] / d["Flight Distance"]}, index=d.index)
 
 
@@ -477,8 +477,8 @@ def none(d):
 
 
 def gender(d):
-    # 生のGender列を戻す。前向き追加(#21)では効かなかったが、当時は21列。TEの事前確認(#79)で今のモデルの残差との
-    # 相関+0.0037(組み合わせのTEと同程度)だったため、事前確認で落とさず学習で確かめる(得られた知見#5)
+    # 生のGender列を戻す。前向き追加では効かなかったが、当時は21列。TEの事前確認で今のモデルの残差との
+    # 相関+0.0037(組み合わせのTEと同程度)だったため、事前確認で落とさず学習で確かめる
     return pd.DataFrame({"Gender": d["Gender"].astype("category")})
 
 
@@ -545,10 +545,10 @@ FE.update({"eq_time_gate": eq_flag("eq_time_gate", [("Departure/Arrival time con
            "te_age_class": te_key("te_age_class"), "te_age_travel": te_key("te_age_travel")})
 RSD_REST = {"rsd_booking": "Ease of Online booking", "rsd_time": "Departure/Arrival time convenient", "rsd_gate": "Gate location",
             "rsd_food": "Food and drink", "rsd_seat": "Seat comfort", "rsd_ent": "Inflight entertainment", "rsd_onboard": "On-board service",
-            "rsd_baggage": "Baggage handling", "rsd_checkin": "Checkin service", "rsd_clean": "Cleanliness"}  # 残り10項目の路線標準偏差(#161で全て不採用、予約は保留)
+            "rsd_baggage": "Baggage handling", "rsd_checkin": "Checkin service", "rsd_clean": "Cleanliness"}  # 残り10項目の路線標準偏差(全て不採用、予約は保留)
 FE.update({k: route_std(k, c) for k, c in RSD_REST.items()})
 FE.update({"rsd_age": route_std("rsd_age", "Age"), "rsd_dep": route_std("rsd_dep", "Departure Delay in Minutes"),
-           "rsd_arr": route_std("rsd_arr", "Arrival Delay in Minutes"),  # 年齢・遅延の路線標準偏差(#161で不採用)。客層内偏差の拡張(#162)・組み合わせTE(#163)・年齢÷距離(#165)も不採用
+           "rsd_arr": route_std("rsd_arr", "Arrival Delay in Minutes"),  # 年齢・遅延の路線標準偏差(不採用)。客層内偏差の拡張・組み合わせTE・年齢÷距離も不採用
            "ctx_ctc_wifi": ctx_dev("ctx_ctc_wifi", ["Class", "Type of Travel", "Customer Type"], {"v": "Inflight wifi service"}),
            "ctx_ctc_boarding": ctx_dev("ctx_ctc_boarding", ["Class", "Type of Travel", "Customer Type"], {"v": "Online boarding"}),
            "ctx_ctc_z": ctx_dev("ctx_ctc_z", ["Class", "Type of Travel", "Customer Type"], z=True),
@@ -557,7 +557,7 @@ FE.update({"rsd_age": route_std("rsd_age", "Age"), "rsd_dep": route_std("rsd_dep
 
 
 def route_class_std(name, col):
-    # 路線×Classごとの評価の標準偏差(追加候補B、#166で不採用)。同じ路線でもBusinessとEcoで客層が違うため細かく分ける。人数が減る分ぶれやすい
+    # 路線×Classごとの評価の標準偏差(追加候補B、不採用)。同じ路線でもBusinessとEcoで客層が違うため細かく分ける。人数が減る分ぶれやすい
     def f(d):
         k = ["Flight Distance", "Class"]
         both = pd.concat([pd.read_csv(fn, usecols=k + [col]) for fn in ("data/train.csv", "data/test.csv")])
@@ -568,18 +568,18 @@ def route_class_std(name, col):
 
 FE.update({"rs_wifi5": route_share("rs_wifi5", "Inflight wifi service", 5),  # 追加候補A: 路線のWi-Fi 5点の割合(rsd_wifiと順位相関0.60)
            "rcsd_wifi": route_class_std("rcsd_wifi", "Inflight wifi service"),  # 追加候補B
-           # 追加候補C: 路線平均との差(年齢・遅延)。足元の評価の差(#136)は不採用、客層グループ内の差(ctx_ctc)は採用
+           # 追加候補C: 路線平均との差(年齢・遅延)。足元の評価の差は不採用、客層グループ内の差(ctx_ctc)は採用
            "rdev_age": ctx_dev("rdev_age", ["Flight Distance"], {"v": "Age"}),
            "rdev_dep": ctx_dev("rdev_dep", ["Flight Distance"], {"v": "Departure Delay in Minutes"}),
            "rdev_arr": ctx_dev("rdev_arr", ["Flight Distance"], {"v": "Arrival Delay in Minutes"})})
-# 追加候補D: 飛行距離を10刻み・100刻みに丸めた値のTE(Notebooks#1 ⑥、#167で不採用)。人数の少ない路線を近い距離とまとめ、満足率のぶれを抑える。
+# 追加候補D: 飛行距離を10刻み・100刻みに丸めた値のTE(公開ノートブック、不採用)。人数の少ない路線を近い距離とまとめ、満足率のぶれを抑える。
 # 丸めたキーはFE関数で作り、TE辞書に名前を登録して学習ループ(te_fold)で満足率に置き換える
 TE.update({"te_dist10": (None, 3), "te_dist100": (None, 3)})
 FE.update({"te_dist10": lambda d: pd.DataFrame({"te_dist10": d["Flight Distance"] // 10}, index=d.index),
            "te_dist100": lambda d: pd.DataFrame({"te_dist100": d["Flight Distance"] // 100}, index=d.index)})
-DROP = {"drop_gate": ["Gate location"], "drop_dep": ["Departure Delay in Minutes"], "drop_arr": ["Arrival Delay in Minutes"]}  # 足すのではなく、生の列を外して効果を見る候補(Notebooks#18、ゲート#150・遅延2列#164とも不採用)
+DROP = {"drop_gate": ["Gate location"], "drop_dep": ["Departure Delay in Minutes"], "drop_arr": ["Arrival Delay in Minutes"]}  # 足すのではなく、生の列を外して効果を見る候補(公開ノートブック、ゲート・遅延2列とも不採用)
 FE.update({k: none for k in DROP})
-ADOPTED = ["comfort_gate_business", "gate_onboard", "te_distance_m3", "te_dist_class", "freq_dist_travel", "comfort_gate_loyal_business", "rp_legroom", "ev_boarding", "ev_legroom", "ev_checkin", "ev_time", "ctx_ctc", "rsd_wifi"]  # 採用済みのFE(3seed再確認後、仮説検証結果#97・#105・#133・#142・#144・#145・#152・#155。先生役orig_teacher_pub(#125)はOOFで改善するがPublic LBで3構成とも悪化したため外した(#129)。#32・#34・#67・#72・#76・#82)
+ADOPTED = ["comfort_gate_business", "gate_onboard", "te_distance_m3", "te_dist_class", "freq_dist_travel", "comfort_gate_loyal_business", "rp_legroom", "ev_boarding", "ev_legroom", "ev_checkin", "ev_time", "ctx_ctc", "rsd_wifi"]  # 採用済みのFE(3seed再確認後。先生役orig_teacher_pubはOOFで改善するがPublic LBで3構成とも悪化したため外した)
 BASE_OOF = "night_rsd_wifi_cv42"  # 比較相手 = data/oof_lgb_fe_<これ>.npy(最後に採用したFEを--cv-seed 42で足したときのOOF。3seedで比べるときはseed0・1も同名_cv0・_cv1)
 
 
@@ -597,9 +597,10 @@ ap.add_argument("--n-trees", type=int, default=0, help="0より大きいと早�
 ap.add_argument("--es-holdout", type=float, default=0.0, help="0より大きいと、早期停止を検証foldではなく学習側のこの割合で行う(例0.05。OOFが甘くならない)")
 ap.add_argument("--cv-seed", type=int, default=None, help="fold分割のseedを変える(結果が1seedの偶然でないかの再確認用)。OOFは<fe>_cv<seed>の名前で保存")
 ap.add_argument("--predict", action="store_true", help="各foldのモデルでtestを予測して平均し data/submission.csv を作る(提出用)")
-ap.add_argument("--orig", action="store_true", help="元データの行を各foldの学習用の行に足す(仮説検証結果#107)")
-ap.add_argument("--params", default=None, help="PARAMSの一部を一時的に置き換える(JSON、例 {\"num_leaves\": 63}。ハイパラを1つずつ調べる用、仮説検証結果#168〜。num_leavesは31のまま(#168))")
-ap.add_argument("--shap", type=int, default=0, help="fold0だけ学習し、検証foldのこの行数でSHAP値を保存して終わる(チェックシート#19)")
+ap.add_argument("--orig", action="store_true", help="元データの行を各foldの学習用の行に足す")
+ap.add_argument("--params", default=None, help="PARAMSの一部を一時的に置き換える(JSON、例 {\"num_leaves\": 63}。ハイパラを1つずつ調べる用。num_leavesは31のまま)")
+ap.add_argument("--shap", type=int, default=0, help="fold0だけ学習し、検証foldのこの行数でSHAP値を保存して終わる")
+ap.add_argument("--export-fe", action="store_true", help="学習せず、特徴量をdata/fe36_train.csv・fe36_test.csvに書き出して終わる(catboost_kaggle.pyの入力。TEの列はキーのまま)")
 ap.add_argument("--tag", default=None, help="OOF・test予測の保存名を指定する(提出用の構成が既存の実験のファイルを上書きしないため)")
 args = ap.parse_args()
 if args.adopted is not None:
@@ -611,7 +612,9 @@ if args.params:
     PARAMS = {**PARAMS, **json.loads(args.params)}
     print("PARAMS", PARAMS)
 
-cfg = json.load(open(".claude/project.json", encoding="utf-8"))
+# データの置き場所・列名・foldの分け方(リポジトリのルートで実行する前提)
+cfg = {"train_csv": "data/train.csv", "test_csv": "data/test.csv", "id_col": "id", "target_col": "satisfaction",
+       "cv": {"n_splits": 5, "seed": 42}}
 train = pd.read_csv(cfg["train_csv"])
 prep = PREPROC.get(args.fe, lambda d: d)
 train = prep(train)
@@ -635,6 +638,13 @@ if args.predict:
     for c in X.columns[X.dtypes == "category"]:
         Xt[c] = pd.Categorical(Xt[c], categories=X[c].cat.categories)  # trainと同じカテゴリ番号にそろえる
     pred = np.zeros(len(Xt))
+if args.export_fe:
+    test = prep(pd.read_csv(cfg["test_csv"]))
+    Xt = pd.concat([test[BASE]] + [FE[a](test) for a in ADOPTED] + [FE[args.fe](test)], axis=1).drop(columns=DROPS)
+    pd.concat([train[[cfg["id_col"]]], X, pd.Series(y, index=X.index, name=cfg["target_col"])], axis=1).to_csv("data/fe36_train.csv", index=False)
+    pd.concat([test[[cfg["id_col"]]], Xt], axis=1).to_csv("data/fe36_test.csv", index=False)
+    print(f"data/fe36_train.csv・fe36_test.csvに{X.shape[1]}列を書き出した")
+    raise SystemExit
 print(f"{args.fe}: 外した列{DROPS} +{X.shape[1] - base_cols.shape[1]}列 {list(X.columns[base_cols.shape[1]:])}")
 
 oof = np.zeros(len(X))
@@ -656,7 +666,7 @@ for k, (tr, va) in enumerate(skf.split(X, y)):
         m.set_params(n_estimators=args.n_trees)
         m.fit(Xtr, yfit)
     elif args.es_holdout:
-        # 木の本数を学習側の一部(層化抽出)で決める。検証foldは採点だけに使い、答えを見て本数を選ばない(#148)
+        # 木の本数を学習側の一部(層化抽出)で決める。検証foldは採点だけに使い、答えを見て本数を選ばない
         es = np.zeros(len(yfit), bool)
         es[next(StratifiedShuffleSplit(1, test_size=args.es_holdout, random_state=k).split(Xtr, yfit))[1]] = True
         m.fit(Xtr[~es], yfit[~es], eval_X=(Xtr[es],), eval_y=(yfit[es],), eval_metric="auc",
