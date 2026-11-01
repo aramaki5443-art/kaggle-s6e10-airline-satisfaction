@@ -168,7 +168,8 @@ I did not use ideas from public notebooks and discussions as is. I split them in
 ## Validation
 
 - 5-fold StratifiedKFold (seed 42). Comparisons always use the same folds and the same rows.
-- **A feature is adopted only if it improves by +0.00003 on average over three fold splits and in at least two of them.** Changing the split alone moved the difference by about 0.00005, so a single run was not trustworthy.
+- **A feature is adopted only if it improves by +0.00003 on average over three fold splits and in at least two of them.** Changing the fold split (seed) alone moved the difference for the same feature by a standard deviation (σ) of about 0.00005. Averaging three splits reduces this to σ/√3 ≈ 0.00003, so features above that were adopted.
+- **In hindsight, this threshold was loose:** a feature with zero effect still clears it about 16% of the time. Indeed, five features adopted just above the threshold, added together, gave almost no gain on seeds not used for adoption. In the next competition I tightened the threshold to two noise units (about 3% chance adoption) and run only borderline candidates on five seeds.
 - Stacking is evaluated on a separate 5-fold split (seed 7): the blend is learned on four folds and scored on the remaining one.
 - The Public LB (~60k rows) cannot resolve differences below 0.0003, so decisions were made on OOF (700k rows).
 - Checked after the competition: the direction of the difference between two submissions agreed with the Private LB 98% of the time for OOF and 92% for the Public LB (21 submissions, 206 pairs).
