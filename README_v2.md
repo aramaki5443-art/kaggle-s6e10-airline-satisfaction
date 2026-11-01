@@ -189,6 +189,7 @@ I did not use ideas from public notebooks and discussions as is. I split them in
 3. Add models to an ensemble that are both different and strong. Tuning gains shrank to 1/5–1/10 after blending.
 4. The gap to the top came from the number and variety of models. Check early whether public OOF predictions exist, and inspect them before use.
 5. Confirm small differences over several splits and do not chase small Public LB differences. Here, trusting CV moved the final rank from 513 (Public) to 52 (Private). Conversely, the teacher I dropped because of the Public LB did help on the Private LB.
+6. Set the adoption threshold by calculating how often chance alone would pass it, given the measured noise. My "one noise unit" threshold let about 16% of zero-effect features through, and the features adopted just above it did not help when combined.
 
 ## Repository layout
 
