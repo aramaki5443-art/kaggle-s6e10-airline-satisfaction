@@ -96,10 +96,11 @@ Full steps and plots are in [notebooks/EDA.ipynb](notebooks/EDA.ipynb) (8 sectio
 
 ### What did not work (selected)
 
-- Adding the original real dataset as extra training rows: −0.00017. Using a model trained on it as a single "teacher" feature helped OOF (+0.00038) but lowered the Public LB by about 0.0002, so I left it out.
+- Adding the original real dataset as extra training rows: −0.00017.
 - Digit features, GPT-2 token keys, and interaction products: no gain on top of target encoding.
 - TabM (another neural net): its predictions differed the most from the others (rank correlation 0.94), but its single score was 0.0024 lower, so it got no weight. Being different is necessary but not sufficient.
 - Dropping stack members with negative coefficients: −0.00015. A negative coefficient offsets similar members and does not mean the member is useless.
+- **(Exception) Dropped, but it actually worked — the "teacher":** a model trained on the original data whose prediction is used as one feature. It improved OOF by +0.00031 but lowered the Public LB by 0.00020, so I dropped it. After the competition the Private LB showed +0.00025, so dropping it was a mistake — the one major decision I let the Public LB drive.
 
 ## Validation
 
@@ -122,7 +123,7 @@ Full steps and plots are in [notebooks/EDA.ipynb](notebooks/EDA.ipynb) (8 sectio
 2. EDA findings such as segment-dependent effects translate directly into features.
 3. For ensembles, add models that are both different and strong. Gains from hyperparameter tuning shrank to 1/5–1/10 once the models were blended.
 4. At the top of the leaderboard, the gap came from the number and variety of models. Check early whether public OOF predictions exist.
-5. Confirm small differences over several seeds and do not chase small Public LB differences. Here, trusting CV moved the final rank from 513 (Public) to 52 (Private).
+5. Confirm small differences over several seeds and do not chase small Public LB differences. Here, trusting CV moved the final rank from 513 (Public) to 52 (Private). Conversely, the teacher I dropped because of the Public LB did help on the Private LB.
 
 ## Repository layout
 
