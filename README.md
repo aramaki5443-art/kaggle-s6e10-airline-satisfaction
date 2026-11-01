@@ -1,223 +1,223 @@
-# Kaggle Playground S6E10 — Airline Passenger Satisfaction
+# Kaggle Playground S6E10 — 航空会社の乗客満足度予測
 
-> **Summary**
-> - **What I did:** in a Kaggle competition predicting passenger satisfaction from a survey, I worked through EDA, feature engineering, five model types and stacking, and made every adopt/reject decision myself.
-> - **Result:** rank 52 of 3,748 teams (top 1.4%). I chose the final submission by CV (my own validation score) rather than the Public LB, moving from Public rank 513 to Private rank 52.
-> - **Strength:** backing decisions with verification — measuring noise before setting adoption thresholds, isolating causes with control experiments, and recording my wrong calls and a too-loose threshold as lessons.
+> **要約**
+> - **何をしたか:** 乗客アンケートから満足度を予測するKaggleコンペで、EDA・特徴量エンジニアリング・5種類のモデル・スタッキングまで取り組み、各段階の採否を自分で判断した。
+> - **結果:** 3,748チーム中52位(上位1.4%)。最終提出はPublic LBではなくCV(手元の検証スコア)で選び、Public 513位からPrivate 52位に上がった。
+> - **強み:** 判断を検証で裏付ける。ブレを測ってから採用基準を決め、対照実験で原因を切り分け、判断ミスや甘かった基準も振り返りとして記録した。
 
-Binary classification: predict whether a passenger answered "satisfied" from a survey (age, class, type of travel, flight distance, delays and 14 service ratings on a 0–5 scale). Metric: **AUC**. The data is synthetic, generated from a real airline survey; train 699,635 rows, test 299,844 rows.
+乗客アンケート(年齢・座席クラス・旅行目的・飛行距離・遅延・サービス評価14項目(0〜5点))から、その乗客が「満足」と答えたかを当てる二値分類。評価指標は**AUC**。データは実在の航空会社アンケートを元にした人工データで、train 699,635行・test 299,844行。
 
-日本語版: [README.ja.md](README.ja.md)
+English version: [README.en.md](README.en.md)
 
-## Results
+## 結果
 
-**Final: Private LB 0.96239, rank 52 / 3,748 teams (top 1.4%).** The Public rank was 513.
+**最終結果: Private LB 0.96239、52位 / 3,748チーム(上位1.4%)。** Publicでは513位でした。
 
-| Submission | Private LB | Public LB |
+| 提出 | Private LB | Public LB |
 |---|---|---|
-| **(1) Best stack by CV (226 predictions combined into one), selected** | **0.96239** | 0.96182 |
-| (2) Hedge: (1) blended 1:1 with another participant's public LB–tuned submission file, selected | 0.96236 | 0.96202 |
+| **① CVで最良のスタック(226本の予測を1つにまとめたもの)、最終提出に選択** | **0.96239** | 0.96182 |
+| ② 保険: ①と、公開LBに合わせて作られた他の参加者の提出ファイルを1:1で混ぜたもの、最終提出に選択 | 0.96236 | 0.96202 |
 
-The submission chosen by CV, (1), was my best Private score among all submissions.
+CVで選んだ①が、全提出の中でPrivateの最高点でした。
 
-### Score breakdown (where the rank improved)
+### スコアの内訳(どの段階で順位が上がったか)
 
-Private LB of the submission at each stage, placed on the final leaderboard (details of each stage are in the sections below).
+各段階の提出のPrivate LBを、最終順位表に当てはめた順位です(各段階の詳細は下の節)。
 
-| Stage | Private LB | Equivalent rank |
+| 段階 | Private LB | 相当する順位 |
 |---|---|---|
-| Baseline (LightGBM, 20 raw columns) | 0.95910 | ~2,860 (top 76%) |
-| + Feature engineering (LightGBM, 31 columns) | 0.96102 | ~1,760 (top 47%) |
-| + Blend with a different kind of model (RealMLP) | 0.96192 | ~1,170 (top 31%) |
-| + 5-model stack (only models I trained) | 0.96208 | ~1,090 (top 29%) |
-| + Stack including inspected public OOF predictions (final) | **0.96239** | **52 (top 1.4%)** |
+| ベースライン(LightGBM、生の20列) | 0.95910 | 約2,860位(上位76%) |
+| + 特徴量エンジニアリング(LightGBM、31列) | 0.96102 | 約1,760位(上位47%) |
+| + 性格の違うモデル(RealMLP)と混ぜる | 0.96192 | 約1,170位(上位31%) |
+| + 5モデルのスタッキング(自分で学習したモデルだけ) | 0.96208 | 約1,090位(上位29%) |
+| + 点検した公開OOFを加えたスタッキング(最終) | **0.96239** | **52位(上位1.4%)** |
 
-Models I trained myself reached the top 29%; the remaining gap to the top 1.4% (+0.00031) came from adding OOF predictions published by other participants.
+自分で学習したモデルだけで上位29%、そこから上位1.4%までの差(+0.00031)は、他の参加者が公開したOOF予測を取り込んだことによるものです。
 
-### Why it reached the top 1.4%
+### 上位1.4%に届いた理由
 
-Differences at the top are tiny (0.00031 between my own models and the final submission), and the Private rank still contains some luck. This section shows the decisions that determined the rank and that their reasoning held on the Private LB.
+上位の差はごく小さく(自分のモデルだけと最終の差は0.00031)、Privateの順位には運の要素も残ります。ここでは、順位を決めた判断と、その根拠がPrivateでも正しかったことを示します。
 
-1. **Features came from EDA findings:** findings such as "how ratings work depends on the customer segment" and "flight distance behaves like a route ID" became features, raising LightGBM from 0.95846 to 0.96046 (→ [What the EDA found](#what-the-eda-found), [What worked](#what-worked)).
-2. **No decision from a single run:** after measuring that changing the fold split alone moves a difference by about 0.00005, I adopted a feature only if it improved by +0.00003 on average over three fold splits and in at least two of them (→ [Validation](#validation)).
-3. **Time went to model diversity, not tuning (judged by the correlation between model predictions):** tuning raised LightGBM alone by +0.00041, but only +0.000046 after blending. Checking rank correlations between predictions (closer to 1 = more alike) showed that the correlation between the tuned LightGBM and the RealMLP it was blended with had risen from 0.962 to 0.970: tuning had made LightGBM resemble RealMLP, so most of the gain overlapped. Tree models were already highly correlated with each other (0.980–0.992), so adding more trees could not help. TabPFN, which works differently from trees, had correlations of only 0.961–0.965 with them, and adding it raised the 4-model stack by +0.000140 (improved on all 5 folds).
-4. **Public OOF predictions were inspected and added under a fair yardstick:** a survey of top public notebooks showed that "the gap to the top comes from the number and variety of models, not technique". I inspected the public OOF predictions and added them one at a time, checked over three seeds (OOF +0.00038, and +0.00043 on the LB) (→ [How public OOF predictions were added](#how-public-oof-predictions-were-added)).
-5. **The final submission was chosen by CV, not the Public LB:** the Public LB (~60k rows) cannot resolve differences below 0.0003, so I chose by OOF (700k rows). The CV-chosen (1) became my best Private score, moving from Public rank 513 to Private rank 52.
+1. **EDAの発見から特徴量を作った:** 「評価の効き方は客層で変わる」「飛行距離は路線IDのように振る舞う」といった発見を特徴量にし、LightGBMを0.95846→0.96046に上げた(→[EDAで分かったこと](#edaで分かったこと)、[効いたこと](#効いたこと))。
+2. **1回の結果を信じない採否基準:** fold(交差検証のデータの分け方)を変えるだけで差が約0.00005揺れると測ってから、「3通りの分け方で平均+0.00003以上、かつ2つ以上で改善」を採用の条件にした(→[検証の仕方](#検証の仕方))。
+3. **ハイパラ調整より、性格の違うモデルに時間を使った(モデル同士の予測の相関で判断):** 調整でLightGBM単体は+0.00041伸びたが、混ぜると+0.000046に縮んだ。予測の順位相関(1に近いほど同じ予測)を確かめると、調整後のLightGBMと混ぜ相手のRealMLPの相関が0.962→0.970に上がっていた。調整でLightGBMがRealMLPに似て、伸びた分の多くが重なったと考えた。木どうしの相関は0.980〜0.992と高く、木を増やしても補い合えない。そこで木と仕組みの違うTabPFNを足すと、木との相関は0.961〜0.965と低く、4モデルのスタックが+0.000140伸びた(5fold全てで改善)。
+4. **公開OOFを点検し、公平な物差しで取り込んだ:** 上位の公開ノートブックの調査で「上位との差は技術より、混ぜるモデルの数と種類」と分かった。公開OOFは中身を点検し、1本ずつ・3seedで効果を確かめて取り込んだ(OOF+0.00038、LBでも+0.00043)(→[公開OOFの取り込み方](#公開oofの取り込み方))。
+5. **最終提出はPublic LBではなくCVで選んだ:** Public LB(約6万行)は0.0003未満の差を見分けられないため、OOF(70万行)で選んだ。結果、CVで選んだ①がPrivateで最高点になり、Public 513位からPrivate 52位に上がった。
 
-![Public LB progress](docs/img/lb_progress.png)
+![Public LBの推移](docs/img/lb_progress.png)
 
-## Workflow
+## 取り組みの流れ
 
-| Stage | What I did | Main result (OOF AUC) |
+| 段階 | やったこと | 主な結果(OOF AUC) |
 |---|---|---|
-| EDA | Univariate AUC, cross tables, the meaning of a 0 rating, per-segment heatmaps | Found that ratings work differently by customer segment |
-| Feature engineering | Add features one at a time to LightGBM, judged over three fold splits | 20 raw columns 0.95846 → with features 0.96046 (default hyperparameters) |
-| Models | LightGBM, XGBoost, CatBoost, RealMLP, TabPFN (RealMLP and TabPFN reproduced from public notebooks) | Single models 0.9608–0.9611 |
-| Hyperparameter tuning | Optuna (LightGBM, XGBoost; CatBoost on Kaggle GPU) | LightGBM alone +0.00041, only +0.000046 after blending → switched to adding different kinds of models |
-| Ensemble | Logistic-regression stacking on logits (evaluated fairly on a separate split) | 5 models 0.961685 (most of the gain from TabPFN) |
-| Public OOF | Added inspected public OOF predictions; second level = 80% logistic regression + 20% shallow LightGBM | 226 members 0.962266 |
+| EDA | 単変量AUC、クロス集計、評価「0点」の意味、客層ごとのヒートマップ | 評価の効き方が客層で変わることを発見 |
+| 特徴量エンジニアリング | LightGBMで1つずつ足し、CVの分け方3通りで判定 | 生の20列 0.95846 → 特徴量込み 0.96046(既定ハイパラ) |
+| モデル | LightGBM・XGBoost・CatBoost・RealMLP・TabPFN(RealMLP・TabPFNは公開ノートブックの再現) | 単体 0.9608〜0.9611 |
+| ハイパラ調整 | Optuna(LightGBM・XGBoost、CatBoostはKaggleのGPU) | LightGBM単体+0.00041、混ぜると+0.000046 → 性格の違うモデルを増やす方に方針を切り替え |
+| アンサンブル | logitを入力にしたロジスティック回帰のスタッキング(別の分け方で公平に評価) | 5モデルで0.961685(伸びの多くはTabPFN) |
+| 公開OOF | 点検した公開OOFをスタックに追加し、2段目をロジスティック回帰8割+浅いLightGBM 2割に | 226本で0.962266 |
 
-## What the EDA found
+## EDAで分かったこと
 
-Full steps and plots are in [notebooks/EDA.ipynb](notebooks/EDA.ipynb) (8 sections, with outputs). The main figures, findings and the measures they led to are below.
+詳しい手順とグラフは[notebooks/EDA.ipynb](notebooks/EDA.ipynb)(全8節、出力付き)にあります。主な図と発見、そこから試した施策は次のとおりです。
 
-#### Figure 1: Class × Type of Travel
+#### 図1: 座席クラス×旅行目的のクロス集計
 
-- **Purpose:** passenger share and satisfaction for each class × travel-type combination, and how flight distance changes it
-- **Top:** vertical axis = class, horizontal axis = travel type. Left = share of passengers (%), right = satisfaction rate (redder = higher)
-- **Bottom:** vertical axis = satisfaction rate, horizontal axis = flight-distance bin. One line per combination (6 segments)
+- **何を見るか:** 座席クラスと旅行目的の組み合わせごとの人数・満足率と、飛行距離による違い
+- **上段:** 縦軸=座席クラス、横軸=旅行目的。左は人数の割合(%)、右は満足率(赤いほど高い)
+- **下段:** 縦軸=満足率、横軸=飛行距離の区間。線1本が1つの組み合わせ(6区分)
 
-![Figure 1](docs/img/class_x_travel.png)
+![図1](docs/img/class_x_travel.png)
 
-- **Finding 1: only "business class on a business trip" is highly satisfied.** That combination is 73.2%; personal travel is 9.5–11.2% in every class (top right).
-- **Finding 2: most of the flight-distance effect is a customer-segment effect.** Overall, longer flights look more satisfied (univariate AUC 0.696 with the raw distance as the score), but within the 6 segments the same measure drops to 0.44–0.59. For economy business travelers, satisfaction falls with distance (bottom).
-- **→ Measure:** since distance works differently by class, I added "satisfaction rate per distance × class" (+0.00001, adopted but small). Distance itself gave the largest gain as a per-value satisfaction rate (target encoding, +0.00136; [What worked](#what-worked)).
+- **発見1: 満足率が高いのは「出張でビジネスクラス」だけ。** Business×出張は73.2%、私用旅行はクラスに関係なく9.5〜11.2%です(右上)。
+- **発見2: 飛行距離の効き目の多くは、客層の違いの表れ。** 全体では「長距離ほど満足」(値の大小で測った単変量AUC 0.696)ですが、6区分の中では同じ測り方で0.44〜0.59に下がります。エコノミーの出張客では、逆に長距離ほど満足率が下がります(下段)。
+- **→ 施策:** 距離の効き方はクラスで違うと考え、「距離×クラスごとの満足率」を足した(+0.00001、採用したが小さい)。距離そのものは値ごとの満足率(Target Encoding)が最大の改善になった(+0.00136、[効いたこと](#効いたこと))。
 
-#### Figure 2: Satisfaction by rating, per travel type (4 items shown)
+#### 図2: 旅行目的ごとの、評価の点数別の満足率(4項目を抜粋)
 
-- **Purpose:** whether the same rating means the same satisfaction for business and personal travelers
-- **Each panel:** vertical axis = travel type (top = business, bottom = personal), horizontal axis = rating (0–5), number and color = satisfaction rate (%, greener = higher)
+- **何を見るか:** 同じ評価でも、出張客と私用客で満足率がどう違うか
+- **各マス:** 縦軸=旅行目的(上=出張、下=私用)、横軸=評価の点数(0〜5)、数字と色=満足率(%、緑ほど高い)
 
-![Figure 2](docs/img/gate_type_of_travel.png)
+![図2](docs/img/gate_type_of_travel.png)
 
-- **Finding 3: how service ratings work depends on the segment.** Business travelers rise to 70–85% satisfied at ratings 4–5, while personal travelers stay around 10% at every rating (AUC 0.72–0.79 vs 0.50–0.51).
-- **→ Measure:** I built "gated features" that keep a rating only for the segment where it matters and set it to missing otherwise. The same column without the gate did not help (no better than a random column), and a direct comparison gave +0.00021 for the gated version, confirming that the effect comes from the gate. The version restricted to loyal business travelers became the top feature by SHAP.
+- **発見3: サービス評価の効き方は客層で変わる。** 出張客は4〜5点で満足率が70〜85%に上がりますが、私用客は点数に関係なく約10%です(AUCは出張客0.72〜0.79、私用客0.50〜0.51)。
+- **→ 施策:** 効く客層だけ評価の値を持ち、ほかは欠損にする「ゲート特徴量」を作った。ゲートなしの同じ列は効かず(乱数の列と同程度)、ゲートありとの直接比較で+0.00021だったので、効果はゲートによるものと確かめた。常連の出張客に絞った版が、SHAPの寄与で1位になった。
 
-#### Figure 3: Satisfaction of passengers who rated 0, 1 and 5
+#### 図3: 評価0点・1点・5点の人の満足率
 
-- **Purpose:** whether a 0 is the worst rating or "no rating"
-- **Left:** vertical axis = service item, horizontal axis = satisfaction rate. Bar color = rating given to that item (blue 1, red 0, green 5)
-- **Right:** horizontal axis = average rating that people who gave 0 or 1 gave to the other items
+- **何を見るか:** 0点が「最低評価」か「評価なし」か
+- **左:** 縦軸=サービス項目、横軸=満足率。棒の色=その項目に付けた点数(青1点・赤0点・緑5点)
+- **右:** 横軸=0点・1点を付けた人が、ほかの項目に付けた評価の平均
 
-![Figure 3](docs/img/rating_zero.png)
+![図3](docs/img/rating_zero.png)
 
-- **Finding 4: a 0 is not always the worst rating.** For Wi-Fi, online booking and online boarding, the 0 group (red) is more satisfied than the 1 group (blue) — 88.7% vs 39.1% for Wi-Fi — so a 0 most likely means "not used". For seat comfort, food and similar items, red and blue are about the same, so 0 is the worst rating.
-- **→ Measure:** per-item 0 flags scored −0.00002 and were rejected. I confirmed why: a tree can isolate 0 ratings with a single split (rating ≤ 0.5), and the model already estimated their satisfaction correctly (prediction minus actual within ±0.005). The "number of 0 ratings", which spans several items and cannot be built with one split, was adopted (+0.00001).
+- **発見4: 評価「0点」は最低評価とは限らない。** Wi-Fi・オンライン予約・オンライン搭乗は、0点(赤)の満足率が1点(青)より高く、Wi-Fiでは88.7%対39.1%です。「使っていないので評価なし」の意味だと考えられます。座席・食事などは赤と青がほぼ同じで、0点は最低評価です。
+- **→ 施策:** 項目ごとの0点フラグは−0.00002で不採用。木は「評価≦0.5」の1回の分岐で0点の人を切り出せるうえ、0点の人の満足率をすでに正しく見積もれていた(予測と実際の差が±0.005)ためと確かめた。一方、複数の項目にまたがる「0点の個数」は、1回の分岐では作れないので採用した(+0.00001)。
 
-#### Figure 4: Univariate AUC per feature
+#### 図4: 特徴量ごとの単変量AUC
 
-- **Purpose:** which features are strong signals on their own
-- Vertical axis = feature, horizontal axis = univariate AUC (0.5 = random, 1 = perfect). Blue = raw value, orange = satisfaction rate per value
+- **何を見るか:** どの特徴量が単独で強い手がかりか
+- 縦軸=特徴量、横軸=単変量AUC(0.5=当てずっぽう、1=完璧)。青=値の大小、橙=値ごとの満足率で測った値
 
-![Figure 4](docs/img/univariate_auc.png)
+![図4](docs/img/univariate_auc.png)
 
-## What worked
+## 効いたこと
 
-| Measure | Why I tried it | Gain (OOF AUC) | Why I think it worked |
+| 施策 | なぜ試したか | 改善幅(OOF AUC) | なぜ効いたと考えるか |
 |---|---|---|---|
-| Per-value satisfaction rate of flight distance (target encoding) | Checked beforehand: using the satisfaction rate of each individual distance value gave a univariate AUC of 0.741, higher than 10 bins (0.703) or the raw value (0.696) = each value has its own satisfaction quirk | +0.00136 | Distance has only 3,474 distinct values, each behaving like a route ID with its own satisfaction quirk. A tree would need thousands of splits to learn this from the raw value. The Public LB also rose by +0.00122 (94% of the OOF gain) |
-| Gated features (ratings kept only for the segment where they matter) | EDA finding 3 (Figure 2) | +0.00005 to +0.00009 each | Ratings from personal travelers are noise, so keeping values only for the relevant segment makes them easy for trees to use. The top SHAP feature |
-| Expected rating predicted from the other 20 columns (no target used) | Idea from a public notebook | +0.00004 to +0.00009 each for 4 items | Among people giving the same 4, those who rated below their expected value were less satisfied (93% → 30%) |
-| Route-level mean ratings, within-segment deviations | Ideas from a discussion and a public notebook | +0.00004 to +0.00006 | Summaries a tree cannot build in one split |
-| Blending trees with different kinds of models (RealMLP, TabPFN) | Tree models were highly correlated with each other (0.98–0.99) | LB +0.001 | Rank correlation with trees was 0.96, so they can fix rows the trees get wrong |
-| Stacking with public OOF predictions | Survey of top public notebooks | First 123 members +0.00038 (LB +0.00043); +0.00058 in total with the final 226 | Added kinds of models I could not build myself (tabular foundation models, improved TabPFN variants, etc.) |
+| 飛行距離の値ごとの満足率(Target Encoding) | 事前確認: 距離の値1つ1つの満足率を使うと単変量AUCが0.741で、10区間にまとめた場合(0.703)や生の値(0.696)より高かった = 値ごとに満足率のクセがある | +0.00136 | 距離は3,474種類しかなく、値1つ1つが路線IDのように満足率のクセを持つ。木が生の値から学ぶには数千回の分岐が要る。Public LBでも+0.00122(OOFの改善の94%) |
+| ゲート特徴量(効く客層だけ評価の値を持つ) | EDAの発見3(図2) | 各+0.00005〜+0.00009 | 私用客の評価はノイズなので、効く客層だけに値を持たせると木が使いやすい。SHAPの1位もこの列 |
+| 他の20列から予想した評価の期待値(答えは使わない) | 公開ノートブックのアイデア | 4項目で各+0.00004〜+0.00009 | 同じ4点でも、期待値より低めに付けた人ほど満足していない(満足率93%→30%) |
+| 路線ごとの評価の平均、客層グループ内の偏差 | Discussion・公開ノートブックのアイデア | +0.00004〜+0.00006 | 木が1回の分岐では作れない要約 |
+| 性格の違うモデル(RealMLP・TabPFN)を木と混ぜる | 木どうしの予測の相関が0.98〜0.99と高かった | LB+0.001 | 木との順位相関が0.96で、木が間違える行を補える |
+| 公開OOFを使ったスタッキング | 上位の公開ノートブックの調査 | 最初の123本で+0.00038(LB+0.00043)、最終226本で計+0.00058 | 自分では作れなかった種類のモデル(表の基盤モデル、TabPFNの工夫版など)が加わった |
 
-![LightGBM SHAP](docs/img/shap_lightgbm.png)
+![LightGBMのSHAP](docs/img/shap_lightgbm.png)
 
-## What didn't work (selected)
+## 効かなかったこと(抜粋)
 
-- Adding the original real dataset as extra training rows: −0.00017.
-- Digits of numbers, GPT-2 token splits, multiplicative interactions: no gain on top of target encoding.
-- TabM (another neural network): its predictions were the most different from the other models (rank correlation 0.94), but it was 0.0024 weaker on its own and got no weight. Being different is only one of the conditions for helping.
-- Dropping stack members with negative coefficients: −0.00015. A negative coefficient offsets similar members and does not mean the member is useless.
-- **(Exception) Dropped, but it actually worked — the "teacher":** a model trained on the original data whose prediction is used as one feature. It improved OOF by +0.00031 but lowered the Public LB by 0.00020, so I dropped it. After the competition the Private LB showed +0.00025, so dropping it was a mistake — the one major decision I let the Public LB drive.
+- 元の実データを学習の行として足す: −0.00017。
+- 数値の桁、GPT-2のトークン区切り、掛け算の交互作用: Target Encodingの上では伸びなかった。
+- TabM(別のニューラルネット): 他のモデルと最も違う予測だった(順位相関0.94)が、単体が0.0024低く重みが付かなかった。「違う」は効く条件の1つにすぎない。
+- スタックで係数がマイナスのメンバーを外す: −0.00015。マイナスの係数は、似たメンバーとの差し引きの役割で、不要という意味ではない。
+- **(例外)外したが、実は効いていた「先生役」:** 元データで学習したモデルの予測を1つの特徴量にする方法です。OOFで+0.00031でしたが、Public LBで−0.00020だったため外しました。終了後にPrivate LBで確かめると+0.00025で、外したのは誤りでした。Public LBに引っ張られた唯一の大きな判断ミスです。
 
-## How public OOF predictions were added
+## 公開OOFの取り込み方
 
-I added OOF predictions published by other participants (a set of train predictions and test predictions) to my stack. Blending them is easy, but low-quality or optimistic predictions (made while looking at the answers) can raise only the CV score and then collapse on the Private LB. So I proceeded in this order:
+他の参加者が公開したOOF予測(trainでの予測とtestの予測のセット)を、自分のスタックに加えました。混ぜるだけなら簡単ですが、質の悪いものや、答えを見て作られた甘いものが混ざると、CVの点数だけが上がってPrivateで崩れます。そのため次の順で進めました。
 
-1. **Research:** in top public notebooks, top participants stated that "the difference is not technique but the number and variety of other people's models you blend". I judged it worth adding model families my five models lacked (tabular foundation models, etc.).
-2. **Inspect:** for the 124 members, I checked that row counts matched train and test (no misaligned rows), that there were no missing or out-of-range values, and that the mean test prediction was not far from the mean OOF prediction (train and test share the same distribution, so correctly built predictions give nearly the same mean). One member had a higher AUC than my whole stack and a mean of exactly 0.5 (a probability would average close to the ~44% satisfaction rate; 0.5 is what you get when predictions are converted to ranks and blended), so I treated it as an already-blended result and excluded it: its content overlaps other public OOFs and its OOF may be optimistic.
-3. **Measure fairly:** the second level was trained and scored on a split different from the one used for the OOF predictions. Adding 123 members gave OOF +0.00038, and the LB moved by the same amount (+0.00043), so there was no sign of collapse from optimistic OOFs.
-4. **Check each blending setting separately:** each was tried as its own experiment.
-   - **Regularization strength:** compared seven values (C=0.0003–0.03); C=0.003 was best → adopted
-   - **Pruning similar members:** removing members with near-identical predictions (correlation ≥ 0.999) changed nothing; lowering the threshold to 0.998 also removed strong members (−0.000127) → rejected
-   - **Dropping the 49 LightGBM-family members:** +0.000014 on all three seeds. As a control, dropping 48 random members made it worse, confirming the gain came from "being LightGBM family" rather than "fewer members" → adopted
-5. **Add new public OOFs one at a time:** OOFs published late in the competition were also judged one at a time over three seeds and added only if they improved, giving 226 members.
-6. **Keep LB-tuned files out of the main submission:** submission files tuned while watching the Public LB have no OOF and cannot be measured by CV, so I used them only in the hedge (2), never in the main submission (1).
+1. **調べる:** 上位の公開ノートブックを調べると、上位者は「差は技術ではなく、混ぜる他人のモデルの数と種類」と述べていた。自分の5モデルにない系統(表の基盤モデル等)を加える価値があると判断した。
+2. **点検する:** 124本について、行数がtrain・testと同じか(行がずれていないか)、欠損や範囲外の値がないか、testの予測の平均がOOFの平均と大きくずれていないか(trainとtestは同じ分布なので、正しく作られていればほぼ同じになる)を確かめた。1本は、単体のAUCが自分のスタックより高く、平均がちょうど0.5(確率なら満足率の約44%に近くなるはずで、0.5は予測を順位に直して混ぜたときの値)だったため、すでに他のモデルを混ぜた結果とみて外した。中身が他の公開OOFと重なり、OOFが甘くなるおそれがあるため。
+3. **公平に測る:** 2段目は、各モデルのOOFとは別の分け方で学習・採点した。123本を加えるとOOF +0.00038で、LBでも+0.00043とそのまま反映された(公開OOFの甘さによる崩れは見られなかった)。
+4. **混ぜ方の設定も1つずつ確かめる:** それぞれ別の施策として試した。
+   - **正則化の強さ:** 7通り(C=0.0003〜0.03)を比べ、C=0.003が最良だった → 採用
+   - **似たメンバーの間引き:** 予測がほぼ同じ(相関0.999以上)メンバーを外しても±0、基準を0.998に下げると強いメンバーまで外れて−0.000127 → 不採用
+   - **LightGBM系統49本を外す:** 3seedそろって+0.000014。対照として、ランダムに48本外すと悪化した。「本数が減ったから」ではなく「LightGBM系統だから」効いたと確かめて → 採用
+5. **新しい公開OOFは1本ずつ足す:** コンペ終盤に公開されたOOFも、1本ずつ・3seedで判定し、改善したものだけ加えて226本にした。
+6. **LBに合わせたファイルは本命に混ぜない:** 公開LBを見ながら調整された提出ファイルは、OOFが無くCVで測れないので、本命①には使わず、保険の②だけに使った。
 
-## Ensemble (second level) design
+## アンサンブル(2段目)の設計
 
-(1) combines 226 predictions — five models I trained myself (LightGBM, XGBoost and CatBoost implemented by me; RealMLP and TabPFN reproduced from public notebooks) plus public OOF predictions — into one prediction with a second-level model. The second level blends two models 80:20.
+①は、自分で学習した5種類のモデル(LightGBM・XGBoost・CatBoostは自分で実装、RealMLP・TabPFNは公開ノートブックの再現)の予測と、公開OOFを合わせた226本を、もう1段のモデル(2段目)で1つの予測にまとめたものです。2段目は2つのモデルの答えを8:2で混ぜています。
 
-- **Logistic regression (80%):** combines the 226 predictions as a weighted sum. Stable, but it can only add.
-- **Shallow LightGBM (20%):** can learn conditional rules such as "when these two predictions disagree, trust this one". The trees are kept shallow (15 leaves, at least 2,000 rows per leaf) and strongly regularized to avoid overfitting. The 80:20 ratio was taken from the public notebook as is, because re-selecting it on my own OOF would inflate the score.
-- Adding LightGBM improved OOF by only +0.000006, but it improved under all three fold splits, so it was kept.
+- **ロジスティック回帰(8割):** 226本の予測を「重み付きの足し算」でまとめます。安定していますが、足し算しか表せません。
+- **浅いLightGBM(2割):** 「この予測とこの予測の意見が割れたら、こちらを信じる」のような、条件による使い分けを学べます。当てはめすぎを防ぐため、木を浅くし(葉15枚・葉の最小行数2000)、正則化を強めました。8:2の比率は、手元のOOFで選び直すと点数が甘く出るため、公開ノートブックの値をそのまま使いました。
+- LightGBMを混ぜた改善はOOFで+0.000006と小さいものでしたが、3通りのfoldの分け方すべてで改善したため採用しました。
 
-**Why logistic regression is the main second-level model:**
+**2段目の主役をロジスティック回帰にした根拠:**
 
-1. **Same as the top public notebooks:** all seven top public notebooks I surveyed used logistic regression on logit-transformed predictions as the second level.
-2. **Slightly better in a fair comparison:** I compared it with the other common method, a weighted rank average: convert each model's predictions to ranks, try every combination of model weights (e.g. 0.6:0.4) in steps of 0.1, and average with the best-scoring combination. With five models, logistic regression scored 0.961685 and the weighted rank average 0.961646 (+0.000039). Note that both methods choose their weights by looking at the answers, so scoring on the same data used to choose the weights inflates the score. I therefore split the training data (~700k records) into five groups and, for both logistic regression and the weighted rank average, chose the weights on four groups and scored on the remaining one.
-3. **It can set weights for many predictions:** a brute-force weight search like the weighted rank average has far too many combinations with 226 predictions, whereas logistic regression computes all 226 weights at once.
-4. **It keeps weights from becoming extreme when predictions are similar:** with many near-duplicate predictions, weights tend to take extreme values (a large positive weight on one and a large negative weight on another) and overfit the training data. L2 regularization (which keeps weights from growing too large) prevents this. Among seven strengths, C=0.003 was best; too strong (0.0003) also shrank the weights of strong models (−0.000072), and too weak (0.03) let the weights of similar predictions blow up (−0.000031).
-5. **Better than LightGBM alone:** LightGBM alone as the second level scored 0.96204, below logistic regression (0.96225), so LightGBM is used only as a 20% helper.
+1. **上位の公開ノートブックと同じ:** 上位の公開ノートブック7本を調べると、2段目はすべて「予測をlogit(対数オッズ)に直してからのロジスティック回帰」でした。
+2. **公平に比べて少し上:** よく使われるもう1つの混ぜ方「順位の重み付き平均」と比べました。これは、各モデルの予測を順位に直し、各モデルの重み(例: 0.6:0.4)を0.1刻みで総当たりで調べて、最も良く当たる組み合わせを選んで平均する方法です。2つを比べた結果、5モデルではロジスティック回帰が0.961685、順位の重み付き平均が0.961646で、ロジスティック回帰が+0.000039上でした。なお、どちらの混ぜ方も答えを見て重みを決めるため、重みを決めたデータでそのまま採点すると点数が甘く出ます。そこで、trainのデータ(約70万件)を5つのグループに分け、4グループで重みを決めて残り1グループで採点する方法を、ロジスティック回帰と順位の重み付き平均の両方で行いました。
+3. **本数が多くても重みを決められる:** 順位の重み付き平均のように重みを総当たりで調べる方法は、226本では組み合わせが多すぎて使えません。ロジスティック回帰は、226本の重みを計算で一度に決められます。
+4. **似た予測が多くても重みが偏りにくい:** ほぼ同じ予測が何本もあると、重みが極端な値(片方に大きなプラス、もう片方に大きなマイナス等)になり、手元のデータに合わせすぎた予測になりがちです。ロジスティック回帰は正則化(重みが大きくなりすぎないようにする仕組み)でこれを抑えられます。正則化の強さCを7通り比べ、C=0.003が最良でした。強すぎる(0.0003)と強いモデルの重みまで縮んで−0.000072、弱すぎる(0.03)と似た予測の重みが暴れて−0.000031でした。
+5. **LightGBMだけより上:** LightGBMだけを2段目にすると0.96204で、ロジスティック回帰(0.96225)より低くなりました。そのため、LightGBMは主役ではなく2割の補助にしました。
 
-**What the hedge (2) is:** another participant's submission file that had been tuned while watching the Public LB (Public 0.96213). It has no OOF, so it cannot be evaluated by CV. (1) and that file were each converted to prediction ranks (0–1) and averaged 0.5:0.5. The 0.5 was fixed in advance so as not to fit the Public LB. Because the final rank uses the better Private score of the two slots, I submitted one CV-trusting file (1) and one Public-LB-trusting file (2).
+**保険②の中身:** 公開LBを見ながら調整された、他の参加者の提出ファイル(公開LB 0.96213)を使いました。このファイルにはOOFが無いため、CVでは良し悪しを測れません。①と相手のファイルを、それぞれ予測の大きさの順位(0〜1)に直してから0.5:0.5で平均しました。0.5は、公開LBに合わせないために固定した値です。最終順位は2枠のうちPrivateが良い方で決まるので、「CVを信じる①」と「公開LBを信じる②」の両方を出しました。
 
-## What I learned from other participants and adopted
+## 他の参加者から学んで取り入れたこと
 
-I did not use ideas from public notebooks and discussions as is. I split them into single elements and checked each with my own CV before adopting it; ideas that did not help were not adopted.
+公開ノートブック・Discussionのアイデアは、そのまま使わず、要素に分けて手元のCVで確かめてから取り入れました。効かなかったものは採用していません。
 
-| Idea | Source | How I checked it | Decision |
+| アイデア | 出典 | 自分での確かめ方 | 判断 |
 |---|---|---|---|
-| All-categorical CatBoost (+ no target encoding) | Public notebook (reported +0.00015) | Tested "all columns categorical" and "drop target encoding" separately: +0.000187 and ±0 | Adopted only the all-categorical part; attributed the reported gain to it |
-| Segment statistics (48 columns) | Public notebook (reported +0.00015) | Reduced to 4 deviation columns, judged over three seeds (+0.0000375); versions grouped by boarding / Wi-Fi rejected | Adopted the 4 columns only |
-| Route profile (treat distance as a route ID) | Discussion | Tried route-level mean ratings for 3 items; only leg room improved over three seeds (+0.000061) | Adopted leg room only |
-| Expected ratings (rating predicted from other columns) | Public notebook | Judged 11 items one at a time over three seeds | Adopted 4 items |
-| Blending a shallow LightGBM into the second level | Public notebook | Kept the 0.2 ratio without re-selecting it; +0.000006 over three seeds (3/3 improved) | Adopted |
-| Per-family logit scaling (TabPFN ×3, etc.) | Public notebook | Compared seven scalings over three seeds; none improved on all three | Rejected (judged to be optimal only for that notebook's stack) |
-| Per-family regularization strength | Public notebook | Searched on one split and confirmed on another; equivalent to dropping the LightGBM family, no extra gain | Rejected |
-| Original-data teacher | Three public notebooks (reported +0.00055 to +0.00072) | +0.00026 over three seeds, +0.00038 in total with the public notebook's settings | Adopted → dropped because of the Public LB (a mistake; see [What didn't work](#what-didnt-work-selected)) |
-| Public LB–tuned submission files | Public submission files | No OOF, cannot be measured by CV | Kept out of the main submission; used only in the hedge (2) |
+| CatBoostの全列カテゴリ化(+TEなし) | 公開ノートブック(+0.00015の報告) | 「全列カテゴリ化」と「TEを外す」を別々に試した。前者+0.000187、後者±0 | 全列カテゴリ化だけ採用。報告の効果は全列カテゴリ化によるものと切り分けた |
+| 客層グループの統計(48列) | 公開ノートブック(+0.00015の報告) | 偏差だけの4列に絞って3seedで判定(+0.0000375)。搭乗・Wi-Fiで区切る版は不採用 | 4列だけ採用 |
+| 路線プロファイル(距離を路線IDとみなす) | Discussion | 路線ごとの評価の平均を3項目で試し、足元の広さだけ3seedで+0.000061 | 足元の広さだけ採用 |
+| 評価の期待値(他の列から予想した点数) | 公開ノートブック | 11項目を1つずつ3seedで判定 | 4項目を採用 |
+| 2段目への浅いLightGBMの混合 | 公開ノートブック | 比率0.2は選び直さず、3seedで+0.000006(3/3改善) | 採用 |
+| 系統ごとのlogitの倍率(TabPFN×3など) | 公開ノートブック | 7通りの倍率を3seedで比較。3seedそろって伸びた構成なし | 不採用(そのノートブックのスタックでの最適値と判断) |
+| 系統ごとの正則化の強さ | 公開ノートブック | 1つの分け方で探し、別の分け方で確認。LightGBM系統を外すのと同じで上乗せなし | 不採用 |
+| 元データの先生役 | 公開ノートブック3件(+0.00055〜0.00072の報告) | 3seedで+0.00026、公開ノートブックの設定で計+0.00038 | 採用 → Public LBで外した(誤り、[効かなかったこと](#効かなかったこと抜粋)) |
+| 公開LBに合わせた提出ファイル | 公開の提出ファイル | OOFが無く、CVで測れない | 本命には混ぜず、保険の②だけに使用 |
 
-## Validation
+## 検証の仕方
 
-- 5-fold StratifiedKFold (seed 42). Comparisons always use the same folds and the same rows.
-- **A feature is adopted only if it improves by +0.00003 on average over three fold splits and in at least two of them.** Changing the fold split (seed) alone moved the difference for the same feature by a standard deviation (σ) of about 0.00005. Averaging three splits reduces this to σ/√3 ≈ 0.00003, so features above that were adopted.
-- **In hindsight, this threshold was loose:** a feature with zero effect still clears it about 16% of the time. Indeed, five features adopted just above the threshold, added together, gave almost no gain on seeds not used for adoption. In the next competition I tightened the threshold to two noise units (about 3% chance adoption) and run only borderline candidates on five seeds.
-- Stacking is evaluated on a separate 5-fold split (seed 7): the blend is learned on four folds and scored on the remaining one.
-- The Public LB (~60k rows) cannot resolve differences below 0.0003, so decisions were made on OOF (700k rows).
-- Checked after the competition: the direction of the difference between two submissions agreed with the Private LB 98% of the time for OOF and 92% for the Public LB (21 submissions, 206 pairs).
+- 5分割のStratifiedKFold(seed 42)。比較は常に同じfold・同じ行で行う。
+- **特徴量は、CVの分け方3通りで差の平均が+0.00003以上、かつ3通り中2つ以上で改善したときだけ採用。** foldの分け方(seed)を変えるだけで、同じ特徴量の差が標準偏差(σ)約0.00005揺れた。3通りの平均ではブレがσ/√3 ≈ 0.00003に減るので、それを超えたものを採用した。
+- **振り返ると、この基準は緩かった:** 効果ゼロの特徴量でも約16%は基準を超える。実際、基準すれすれで採用した5つをまとめて入れると、採用に使っていないseedでは改善がほぼ0だった。次のコンペでは基準をブレ2つ分(偶然の採用は約3%)に厳しくし、微妙な候補だけ5seedに増やしている。
+- スタッキングは別の5分割(seed 7)で評価し、混ぜ方を4つで学んで残り1つで採点した。
+- Public LB(約6万行)は0.0003未満の差を見分けられないので、判断はOOF(70万行)で行った。
+- 終了後に確かめると、2つの提出の差の向きがPrivateと一致した割合は、OOFで98%、Public LBで92%だった(21提出、206組)。
 
-## My own work vs. external resources
+## 自分の工夫と外部の活用の区別
 
-- **Implemented by me:** EDA, all feature-engineering code, the three-seed adoption procedure, training and tuning of LightGBM, XGBoost and CatBoost, and stacking with its evaluation. Code is in `src/` and `experiments/`.
-- **Ideas taken from public notebooks and re-implemented in my own code:** original-data teacher, expected-value features, route profile, segment statistics, all-categorical CatBoost, and blending a shallow LightGBM into the second level (ewtherka).
-- **Reproduced from public notebooks (code not included in this repository):** the RealMLP configuration (yekenot) and the TabPFN memory workaround (hemingweb).
-- **Used as-is (not included):** published OOF predictions from about 20 Kaggle datasets (cdeotte and others) as stack members in the final submission.
-- **Final submission:** slot 1 is the best stack by CV (Private 0.96239). Slot 2 is a hedge: slot 1 and another participant's public LB–tuned submission file, each converted to ranks and averaged 1:1 (Private 0.96236). Slot 2 has no CV backing and did slightly worse on the Private LB.
+- **自分で実装したもの:** EDA、特徴量エンジニアリングのコード全部、3seedでの採否判定の仕組み、LightGBM・XGBoost・CatBoostの学習と調整、スタッキングとその評価。コードは`src/`と`experiments/`にあります。
+- **公開ノートブックのアイデアを、自分のコードで実装し直したもの:** 元データの先生役、期待値の列、路線プロファイル、客層グループの統計、CatBoostの全列カテゴリ化、2段目への浅いLightGBMの混合(ewtherka氏)。
+- **公開ノートブックを再現したもの(このリポジトリにはコードを含めない):** RealMLPの設定(yekenot氏)、TabPFNのメモリ節約の処理(hemingweb氏)。
+- **そのまま使ったもの(含めない):** 約20のKaggleデータセットで公開された予測(cdeotte氏ほか)を、最終提出のスタックのメンバーとして使用。
+- **最終提出:** 1枠目はCVで最良のスタック(Private 0.96239)。2枠目は保険で、1枠目と、公開LBに合わせて作られた他の参加者の提出ファイルを、予測の順位に直して1:1で平均したもの(Private 0.96236)。2枠目にはCVの裏付けがなく、Privateではわずかに下でした。
 
-## Lessons learned
+## 学んだこと
 
-1. With synthetic data, first suspect per-value quirks. Per-value target encoding was the single largest gain.
-2. EDA findings such as "the effect depends on the customer segment" translate directly into features.
-3. Add models to an ensemble that are both different and strong. Tuning gains shrank to 1/5–1/10 after blending.
-4. The gap to the top came from the number and variety of models. Check early whether public OOF predictions exist, and inspect them before use.
-5. Confirm small differences over several splits and do not chase small Public LB differences. Here, trusting CV moved the final rank from 513 (Public) to 52 (Private). Conversely, the teacher I dropped because of the Public LB did help on the Private LB.
-6. Set the adoption threshold by calculating how often chance alone would pass it, given the measured noise. My "one noise unit" threshold let about 16% of zero-effect features through, and the features adopted just above it did not help when combined.
+1. 人工データでは、まず値ごとのクセを疑う。値ごとのTarget Encodingが単独で最大の改善だった。
+2. 客層で効き方が変わるといったEDAの発見は、そのまま特徴量になる。
+3. アンサンブルには「違う」かつ「強い」モデルを足す。ハイパラ調整の伸びは、混ぜると1/5〜1/10に縮んだ。
+4. 上位との差は、モデルの数と種類から来ていた。公開OOFがあるかは早めに調べ、点検してから使う。
+5. 小さな差は分け方を変えて複数回確かめ、Public LBの小さな差は追わない。今回はCVを信じたことで、Public 513位からPrivate 52位になった。逆に、Public LBで外した先生役はPrivateでは効いていた。
+6. 採用基準は、ブレの大きさから偶然の採用がどのくらい起きるかを計算して決める。今回の「ブレ1つ分」では効果ゼロでも約16%が通り、すれすれで採用した特徴量はまとめると効いていなかった。
 
-## Repository layout
+## フォルダ構成
 
 ```
-src/            lgb_fe_check.py (features + LightGBM + three-seed judgment), aux_expected_value.py,
-                xgb_check.py, catboost_kaggle.py (Kaggle GPU), stack_check.py (stacking evaluation)
-experiments/    lgb_forward_add.py, lgb_optuna.py, shap_report.py
-notebooks/      EDA.ipynb (with outputs)
-docs/           review_ja.pdf (52-slide review deck, Japanese), img/
+src/            lgb_fe_check.py(特徴量+LightGBM+3seed判定)、aux_expected_value.py、
+                xgb_check.py、catboost_kaggle.py(KaggleのGPU)、stack_check.py(スタッキングの評価)
+experiments/    lgb_forward_add.py、lgb_optuna.py、shap_report.py
+notebooks/      EDA.ipynb(出力付き)
+docs/           review_ja.pdf(振り返りスライド52枚)、img/(図。*_en.pngは英語版)、make_figures_en.py(英語版の図を作る)
 ```
 
-## How to reproduce
+## 再現手順
 
 ```bash
 uv sync
-# Download train.csv and test.csv from the competition page into data/
-python src/lgb_fe_check.py --help          # each script's docstring explains its purpose and usage
+# コンペのページからtrain.csvとtest.csvをdata/に置く
+python src/lgb_fe_check.py --help          # 各スクリプト冒頭のdocstringに目的と使い方を書いています
 python src/aux_expected_value.py --col "Online boarding" --name boarding
-python src/lgb_fe_check.py --fe none --export-fe   # writes data/fe36_*.csv, the input of catboost_kaggle.py
+python src/lgb_fe_check.py --fe none --export-fe   # catboost_kaggle.pyの入力(data/fe36_*.csv)を書き出す
 ```
 
-Run scripts from the repository root.
+スクリプトはリポジトリのルートで実行します。
 
-## About development
+## 開発について
 
-Analysis and implementation were done with an AI coding assistant (Claude Code). I decided which experiments to run and which results to adopt, and kept my own experiment log.
+分析と実装は、AIコーディングアシスタント(Claude Code)を使って進めました。どの実験をするか、どの結果を採用するかは自分で判断し、自分の実験記録に残しています。
