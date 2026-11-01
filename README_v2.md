@@ -136,12 +136,12 @@ I added OOF predictions published by other participants (a set of train predicti
 (1) combines 226 predictions — five models I trained myself (LightGBM, XGBoost and CatBoost implemented by me; RealMLP and TabPFN reproduced from public notebooks) plus public OOF predictions — into one prediction with a second-level model. The second level blends two models 80:20.
 
 - **Logistic regression (80%):** combines the 226 predictions as a weighted sum. Stable, but it can only add.
-- **Shallow LightGBM (20%):** can learn conditional rules such as "when these two predictions disagree, trust this one". The trees are kept shallow (15 leaves, at least 2,000 rows per leaf) and strongly regularized to avoid overfitting. The 80:20 ratio was taken from the public example as is, because re-selecting it on my own OOF would inflate the score.
+- **Shallow LightGBM (20%):** can learn conditional rules such as "when these two predictions disagree, trust this one". The trees are kept shallow (15 leaves, at least 2,000 rows per leaf) and strongly regularized to avoid overfitting. The 80:20 ratio was taken from the public notebook as is, because re-selecting it on my own OOF would inflate the score.
 - Adding LightGBM improved OOF by only +0.000006, but it improved under all three fold splits, so it was kept.
 
 **Why logistic regression is the main second-level model:**
 
-1. **Same as the top public examples:** all seven top public notebooks I surveyed used logistic regression on logit-transformed predictions as the second level.
+1. **Same as the top public notebooks:** all seven top public notebooks I surveyed used logistic regression on logit-transformed predictions as the second level.
 2. **Slightly better in a fair comparison:** I compared it with the other common method, a weighted rank average: convert each model's predictions to ranks, try every combination of model weights (e.g. 0.6:0.4) in steps of 0.1, and average with the best-scoring combination. With five models, logistic regression scored 0.961685 and the weighted rank average 0.961646 (+0.000039). Note that both methods choose their weights by looking at the answers, so scoring on the same data used to choose the weights inflates the score. I therefore split the training data (~700k records) into five groups and, for both logistic regression and the weighted rank average, chose the weights on four groups and scored on the remaining one.
 3. **It can set weights for many predictions:** a brute-force weight search like the weighted rank average has far too many combinations with 226 predictions, whereas logistic regression computes all 226 weights at once.
 4. **It keeps weights from becoming extreme when predictions are similar:** with many near-duplicate predictions, weights tend to take extreme values (a large positive weight on one and a large negative weight on another) and overfit the training data. L2 regularization (which keeps weights from growing too large) prevents this. Among seven strengths, C=0.003 was best; too strong (0.0003) also shrank the weights of strong models (−0.000072), and too weak (0.03) let the weights of similar predictions blow up (−0.000031).
@@ -155,14 +155,14 @@ I did not use ideas from public notebooks and discussions as is. I split them in
 
 | Idea | Source | How I checked it | Decision |
 |---|---|---|---|
-| All-categorical CatBoost (+ no target encoding) | goodpjw2008's public notebook (reported +0.00015) | Tested "all columns categorical" and "drop target encoding" separately: +0.000187 and ±0 | Adopted only the all-categorical part; attributed the reported gain to it |
+| All-categorical CatBoost (+ no target encoding) | Public notebook (reported +0.00015) | Tested "all columns categorical" and "drop target encoding" separately: +0.000187 and ±0 | Adopted only the all-categorical part; attributed the reported gain to it |
 | Segment statistics (48 columns) | Public notebook (reported +0.00015) | Reduced to 4 deviation columns, judged over three seeds (+0.0000375); versions grouped by boarding / Wi-Fi rejected | Adopted the 4 columns only |
 | Route profile (treat distance as a route ID) | Discussion | Tried route-level mean ratings for 3 items; only leg room improved over three seeds (+0.000061) | Adopted leg room only |
 | Expected ratings (rating predicted from other columns) | Public notebook | Judged 11 items one at a time over three seeds | Adopted 4 items |
-| Blending a shallow LightGBM into the second level | ewtherka's public notebook | Kept the 0.2 ratio without re-selecting it; +0.000006 over three seeds (3/3 improved) | Adopted |
-| Per-family logit scaling (TabPFN ×3, etc.) | Den Pugovkin's public notebook | Compared seven scalings over three seeds; none improved on all three | Rejected (judged to be optimal only for that author's stack) |
-| Per-family regularization strength | Public example | Searched on one split and confirmed on another; equivalent to dropping the LightGBM family, no extra gain | Rejected |
-| Original-data teacher | Three public notebooks (reported +0.00055 to +0.00072) | +0.00026 over three seeds, +0.00038 in total with the public settings | Adopted → dropped because of the Public LB (a mistake; see [What didn't work](#what-didnt-work-selected)) |
+| Blending a shallow LightGBM into the second level | Public notebook | Kept the 0.2 ratio without re-selecting it; +0.000006 over three seeds (3/3 improved) | Adopted |
+| Per-family logit scaling (TabPFN ×3, etc.) | Public notebook | Compared seven scalings over three seeds; none improved on all three | Rejected (judged to be optimal only for that notebook's stack) |
+| Per-family regularization strength | Public notebook | Searched on one split and confirmed on another; equivalent to dropping the LightGBM family, no extra gain | Rejected |
+| Original-data teacher | Three public notebooks (reported +0.00055 to +0.00072) | +0.00026 over three seeds, +0.00038 in total with the public notebook's settings | Adopted → dropped because of the Public LB (a mistake; see [What didn't work](#what-didnt-work-selected)) |
 | Public LB–tuned submission files | Public submission files | No OOF, cannot be measured by CV | Kept out of the main submission; used only in the hedge (2) |
 
 ## Validation
