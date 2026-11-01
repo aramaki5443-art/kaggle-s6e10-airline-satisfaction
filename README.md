@@ -6,14 +6,16 @@ Binary classification: predict whether an airline passenger is satisfied from a 
 
 ## Result
 
-| | Public LB (AUC) | Rank |
-|---|---|---|
-| Final submission (hedge, see below) | **0.96202** | **451 / 3,551 teams (top 12.7%)** |
-| Best stack validated by CV (226 members) | 0.96182 | - |
-| Own models only (5-model stack) | 0.96123 | - |
-| Baseline (LightGBM, raw 20 columns) | 0.95817 | - |
+**Final: Private LB 0.96239, rank 52 / 3,748 teams (top 1.4%).** The Public rank was 513, so the final position rose by 461 places.
 
-Public LB and rank were checked on 2026-10-30. The Private LB is announced after the competition ends.
+| Submission | Private LB | Public LB |
+|---|---|---|
+| **Best stack by CV (226 members + shallow LightGBM blend), selected** | **0.96239** | 0.96182 |
+| Hedge: 50/50 rank average with a public LB–tuned file, selected | 0.96236 | 0.96202 |
+| Own models only (5-model stack) | 0.96208 | 0.96123 |
+| Baseline (LightGBM, raw 20 columns) | 0.95910 | 0.95817 |
+
+The submission chosen by cross-validation was my best Private score among all submissions. The hedge scored higher on the Public LB but lower on the Private LB. Most of the jump in rank came from many teams that had submitted public LB–tuned files dropping on the Private LB: 71% of the Public top 360 finished below rank 500. My own Private−Public gain (+0.00034) was close to the median of teams with similar Public ranks (+0.00032).
 
 ![Public LB progress](docs/img/lb_progress.png)
 
@@ -63,7 +65,7 @@ Public LB and rank were checked on 2026-10-30. The Private LB is announced after
 - **Ideas taken from public notebooks and re-implemented in my own code:** original-data teacher, expected-value features, route profile, segment statistics, all-categorical CatBoost.
 - **Reproduced from public notebooks (code not included in this repository):** the RealMLP configuration (yekenot) and the TabPFN memory workaround (hemingweb).
 - **Used as-is (not included):** published OOF predictions from about 20 Kaggle datasets (cdeotte and others) as stack members in the final submission.
-- **Final submission:** slot 1 is the best stack by CV (Public 0.96182). Slot 2 is a hedge: a 50/50 rank average of slot 1 and a public LB–tuned public submission (Public 0.96202). Slot 2 has no CV backing.
+- **Final submission:** slot 1 is the best stack by CV (Private 0.96239). Slot 2 is a hedge: a 50/50 rank average of slot 1 and a public LB–tuned public submission (Private 0.96236). Slot 2 has no CV backing and did slightly worse on the Private LB.
 
 ## Lessons
 
@@ -71,7 +73,7 @@ Public LB and rank were checked on 2026-10-30. The Private LB is announced after
 2. EDA findings such as segment-dependent effects translate directly into features.
 3. For ensembles, add models that are both different and strong. Gains from hyperparameter tuning shrank to 1/5–1/10 once the models were blended.
 4. At the top of the leaderboard, the gap came from the number and variety of models. Check early whether public OOF predictions exist.
-5. Confirm small differences over several seeds and do not chase small Public LB differences.
+5. Confirm small differences over several seeds and do not chase small Public LB differences. Here, trusting CV moved the final rank from 513 (Public) to 52 (Private).
 
 ## Repository layout
 
