@@ -139,15 +139,18 @@ flowchart LR
     M --> TP["testの予測<br>5回分の平均<br>(5列)"]
   end
   subgraph S2["2段目: 重みを学んで混ぜる"]
-    OOF --> LR["ロジスティック回帰で<br>重みを学ぶ"]
+    OOF --> LO1["logitに変換<br>log(p/(1−p))"]
+    LO1 --> LR["ロジスティック回帰で<br>重みを学ぶ"]
     Y["trainの答え"] --> LR
     LR --> W["種類ごとの重み"]
-    W --> MIX["行ごとに<br>testの予測(logit)×重み<br>を足して確率に戻す"]
-    TP --> MIX
+    TP --> LO2["logitに変換<br>log(p/(1−p))"]
+    LO2 --> MIX["行ごとに<br>logit×重みを足す<br>(+切片)"]
+    W --> MIX
+    MIX --> SIG["確率に戻す<br>1/(1+e^−合計)"]
   end
   PUB["公開OOF<br>(7で追加)"] -.-> OOF
   PUB -.-> TP
-  MIX --> SUB["提出<br>各行の満足の確率"] --> LB["Kaggleが採点<br>(LB)"]
+  SIG --> SUB["提出<br>各行の満足の確率"] --> LB["Kaggleが採点<br>(LB)"]
 ```
 
 ### 1段目: 性格の違うモデルをそろえる
