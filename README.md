@@ -133,8 +133,8 @@
 ```mermaid
 flowchart LR
   subgraph S1["1段目: モデルをそろえる"]
-    TR["train<br>特徴量+答え"] --> M["5種類のモデル<br>LightGBM・XGBoost・CatBoost<br>RealMLP・TabPFN<br>(各種類5回学習)"]
-    TE["test<br>特徴量のみ"] --> M
+    TE["test<br>特徴量のみ"] --> M["5種類のモデル<br>LightGBM・XGBoost・CatBoost<br>RealMLP・TabPFN<br>(各種類5回学習)"]
+    TR["train<br>特徴量+答え"] --> M
     M --> OOF["OOF<br>trainの各行の予測<br>(5列)"]
     M --> TP["testの予測<br>5回分の平均<br>(5列)"]
   end
