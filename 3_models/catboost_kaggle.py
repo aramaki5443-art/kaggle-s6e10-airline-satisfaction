@@ -3,7 +3,7 @@
 目的: RealMLP+LightGBMのアンサンブルに、3つ目の木のモデルとしてCatBoostを足す価値があるかを調べる。
 ひとことで言うと: LightGBMと同じ36列を、カテゴリ列の扱い方が違うCatBoostに学習させ、違う予測になるかを見る。
 やり方:
-  - 特徴量はlgb_fe_check.pyの採用済みの列(`python src/lgb_fe_check.py --fe none --export-fe`でdata/fe36_*.csvに書き出す。
+  - 特徴量はlgb_fe_check.pyの採用済みの列(`python 2_feature_engineering/lgb_fe_check.py --fe none --export-fe`でdata/fe36_*.csvに書き出す。
     Kaggleで動かすときは、このCSVをデータセットとして読み込ませる)。TEの2列(距離・距離×Class)だけは
     キーのまま受け取り、foldごとに計算する(te_fold・te_mapはlgb_fe_check.pyと同一)。
   - Class・Type of Travel・Customer TypeはCatBoostのカテゴリ列として渡す(CatBoost独自の、答えを順番に使う集計で数値化される)。

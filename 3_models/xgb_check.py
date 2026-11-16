@@ -21,7 +21,7 @@ from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold
 
 # lgb_fe_check.pyの特徴量の定義(関数・ADOPTED・TE)を読み込む(引数解析より前の部分だけ)
-src = open("src/lgb_fe_check.py", encoding="utf-8").read()
+src = open("2_feature_engineering/lgb_fe_check.py", encoding="utf-8").read()
 g = {"__name__": "fe_defs"}
 exec(compile(src[:src.index("\nap = argparse")], "lgb_fe_check.py", "exec"), g)
 

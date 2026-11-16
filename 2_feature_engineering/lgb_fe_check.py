@@ -12,7 +12,7 @@
     検証用の行はコンペのデータのままなので、OOFは今までと同じ物差しで比べられる。元データの行もTEの満足率の計算に入る。
   - `--shap N`: fold0だけ学習し、検証foldからN行を抜き出してSHAP値(各列が予測をどれだけ押し上げ/押し下げたか)を
     LightGBM内蔵のTreeSHAP(pred_contrib)で計算し、data/shap_lgb_<tag>.npzに保存して終わる(図はshap_report.py)。
-実行: python src/lgb_fe_check.py --fe zero_flags
+実行: python 2_feature_engineering/lgb_fe_check.py --fe zero_flags
 """
 import argparse
 import json
