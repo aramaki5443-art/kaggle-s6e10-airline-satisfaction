@@ -1,4 +1,4 @@
-"""自社LightGBMのSHAP値から、どの列がどう効いているかを表と図にする。
+"""自分のLightGBMのSHAP値から、どの列がどう効いているかを表と図にする。
 
 目的: 特徴量重要度(gain・分岐回数)とSHAPで、各列の寄与の大きさ・向き・列どうしの組み合わせ効果を確認する。
 ひとことで言うと: 1人ずつの予測を「基準値+列ごとの押し上げ/押し下げ」に分解し、それを全員分集めて眺める。
@@ -63,7 +63,7 @@ o = np.argsort(ma)
 fig, ax = plt.subplots(figsize=(8, 0.28 * len(cols) + 1))
 ax.barh(np.array(cols)[o], ma[o])
 ax.set_xlabel("平均|SHAP|(logit、大きいほど予測を大きく動かす列)")
-ax.set_title("列ごとの寄与の大きさ(自社LightGBM、fold0の検証行)")
+ax.set_title("列ごとの寄与の大きさ(自分のLightGBM、fold0の検証行)")
 fig.tight_layout(); fig.savefig(f"{out}/1_bar.png", dpi=110); plt.close(fig)
 # ② beeswarm
 shap.summary_plot(S, X, feature_names=cols, show=False, max_display=len(cols))
