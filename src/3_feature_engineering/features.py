@@ -402,7 +402,7 @@ def route_zero(name, col, kind):
 
 
 def aux_ev(name):
-    # 期待値の列(公開ノートブックのアイデア): aux_expected_value.pyで作った「他の列から予想したこの項目の点数」(train+testの順に保存)。
+    # 期待値の列(公開ノートブックのアイデア): make_expected_value.pyで前もって作った「他の列から予想したこの項目の点数」(train+testの順に保存)。
     # trainとtestで行数が違うので、渡された行数で切り分ける
     def f(d):
         ev = np.load(f"data/aux_ev_{name[3:]}.npy")

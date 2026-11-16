@@ -85,7 +85,7 @@ CVで選んだ①が、全提出の中でPrivateの最高点でした。
 | スクリプト | 役割 |
 |---|---|
 | `features.py` | 特徴量の定義(候補の作り方・採用した特徴量の一覧・Target Encoding)。モデルのスクリプトはすべてここから特徴量を読み込む |
-| `aux_expected_value.py` | 「他の列から予想した評価の期待値」の列を作る(`features.py`の入力) |
+| `make_expected_value.py` | 「他の列から予想した評価の期待値」の列を**前もって計算して保存する**。1項目あたりLightGBMを5回学習して重いため、判定のたびには計算しない。`features.py`の`ev_*`がこの保存結果を読み込む(先に実行しておく) |
 | `shap_report.py` | 採用した特徴量がどの向きにどれだけ効いているかを、SHAP(予測を列ごとの寄与に分解したもの)で確かめる |
 
 候補は1つずつ「今の土台」と「土台+候補」をLightGBM(`src/4_models/lgb_check.py --fe 候補名`)で比べ、[検証の仕方](#検証の仕方)の基準を満たしたものだけを土台に加えました。
@@ -204,7 +204,7 @@ CVで選んだ①が、全提出の中でPrivateの最高点でした。
 src/
   1_eda/                   EDA.ipynb(出力付き、節ごとの考察つき)
   2_baseline/              lgb_forward_add.py
-  3_feature_engineering/   features.py、aux_expected_value.py、shap_report.py
+  3_feature_engineering/   features.py、make_expected_value.py、shap_report.py
   4_models/                lgb_check.py、xgb_check.py、catboost_kaggle.py
   5_tuning/                lgb_optuna.py、xgb_optuna.py、catboost_optuna.py
   6_ensemble/              stack_check.py
@@ -215,9 +215,15 @@ src/
 ```bash
 uv sync
 # コンペのページからtrain.csvとtest.csvをdata/に置く
-python src/4_models/lgb_check.py --help   # 各スクリプト冒頭のdocstringに目的と使い方を書いています
-python src/3_feature_engineering/aux_expected_value.py --col "Online boarding" --name boarding
-python src/4_models/lgb_check.py --fe none --export-fe   # catboost_kaggle.pyの入力(data/fe36_*.csv)を書き出す
+# 1. 評価の期待値の列を前もって計算する(採用した4項目。1項目あたり数分、data/aux_ev_*.npyに保存)
+python src/3_feature_engineering/make_expected_value.py --col "Online boarding" --name boarding
+python src/3_feature_engineering/make_expected_value.py --col "Leg room service" --name legroom
+python src/3_feature_engineering/make_expected_value.py --col "Checkin service" --name checkin
+python src/3_feature_engineering/make_expected_value.py --col "Departure/Arrival time convenient" --name time
+# 2. LightGBM(採用した特徴量で学習。--helpで各オプションの説明)
+python src/4_models/lgb_check.py --fe none
+# 3. CatBoostの入力(data/fe36_*.csv)を書き出す
+python src/4_models/lgb_check.py --fe none --export-fe
 ```
 
 スクリプトはリポジトリのルートで実行します。
