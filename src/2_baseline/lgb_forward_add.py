@@ -9,7 +9,7 @@
   - ハイパラは既定値に近いまま(learning_rate 0.05 + early stopping 100のみ設定)。
     feature_fraction(列の間引き)は既定の1.0なので、列数が変わっても木の抽選パターンが変わる副作用は無い。
 なぜ: 一度に全部入れると、どの特徴量が効いたのか分からない。1つずつ足せば各特徴量の上乗せ分が分かる。
-実行: python src/2_feature_engineering/lgb_forward_add.py --n 1
+実行: python src/2_baseline/lgb_forward_add.py --n 1
       --predict を付けると、各foldのモデルでtestを予測して平均し data/submission.csv を作る(提出用)。
 """
 import argparse

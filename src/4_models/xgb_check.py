@@ -21,7 +21,7 @@ from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold
 
 # features.pyの特徴量の定義(関数・ADOPTED・TE)を読み込む
-src = open("src/2_feature_engineering/features.py", encoding="utf-8").read()
+src = open("src/3_feature_engineering/features.py", encoding="utf-8").read()
 g = {"__name__": "fe_defs"}
 exec(compile(src, "features.py", "exec"), g)
 
