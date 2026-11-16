@@ -137,16 +137,16 @@ flowchart LR
   subgraph S1["1段目: 5種類のモデルで予測を作る"]
     TE["test<br>特徴量のみ"] --> M["5種類のモデル<br>LightGBM・XGBoost・CatBoost<br>RealMLP・TabPFN<br>(各種類5回学習)"]
     TR["train<br>特徴量+答え"] --> M
-    M --> OOF["OOF<br>trainの各行の予測<br>(5列)"]
-    M --> TP["testの予測<br>5回分の平均<br>(5列)"]
+    M --> OOF["OOFを算出<br>trainの各行の予測<br>(5列)"]
+    M --> TP["testの予測を算出<br>5回分の平均<br>(5列)"]
   end
   subgraph S2["2段目: 重みを学んで混ぜる"]
     OOF --> LO1["logitに変換<br>log(p/(1−p))"]
     LO1 --> LR["ロジスティック回帰で<br>重みを学ぶ<br>(trainの全行)"]
     LO1 -.-> CV["成績を測る(提出には使わない)<br>4つで重みを学び、残り1つで採点<br>×5回"]
-    CV -.-> AUC["スタックのOOF AUC<br>公開OOFの追加などが<br>AUC向上に寄与するかを確認"]
+    CV -.-> AUC["スタックのOOF AUCを算出<br>公開OOFの追加などが<br>AUC向上に寄与するかを確認"]
     Y["trainの答え"] --> LR
-    LR --> W["種類ごとの重み"]
+    LR --> W["種類ごとの重みを算出"]
     TP --> LO2["logitに変換<br>log(p/(1−p))"]
     LO2 --> MIX["行ごとに、5種類のlogitに<br>それぞれ重みをかけて合計<br>(+切片)"]
     W --> MIX
@@ -154,7 +154,7 @@ flowchart LR
   end
   PUB["公開OOF<br>(7で追加)"] -.-> OOF
   PUB -.-> TP
-  SIG --> SUB["提出<br>各行の満足の確率"] --> LB["Kaggleが採点<br>(LB)"]
+  SIG --> SUB["各行の満足の確率を算出<br>→ 提出"] --> LB["Kaggleが採点<br>(LB)"]
 ```
 
 ### 1段目: 仕組みの違う5種類のモデルで予測を作る
