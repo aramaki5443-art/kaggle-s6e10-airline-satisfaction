@@ -140,7 +140,9 @@ flowchart LR
   end
   subgraph S2["2段目: 重みを学んで混ぜる"]
     OOF --> LO1["logitに変換<br>log(p/(1−p))"]
-    LO1 --> LR["ロジスティック回帰で<br>重みを学ぶ"]
+    LO1 --> LR["ロジスティック回帰で<br>重みを学ぶ<br>(trainの全行)"]
+    LO1 -.-> CV["成績を測る(提出には使わない)<br>4つで重みを学び、残り1つで採点<br>×5回"]
+    CV -.-> AUC["スタックのOOF AUC"]
     Y["trainの答え"] --> LR
     LR --> W["種類ごとの重み"]
     TP --> LO2["logitに変換<br>log(p/(1−p))"]
