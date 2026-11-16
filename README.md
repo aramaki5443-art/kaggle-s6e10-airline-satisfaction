@@ -130,6 +130,26 @@
 
 **目的:** 性格の違う強いモデルを混ぜて、互いの苦手を補い、AUCを上げる。
 
+```mermaid
+flowchart LR
+  subgraph S1["1段目: モデルをそろえる"]
+    TR["train<br>特徴量+答え"] --> M["5種類のモデル<br>LightGBM・XGBoost・CatBoost<br>RealMLP・TabPFN<br>(各種類5回学習)"]
+    TE["test<br>特徴量のみ"] --> M
+    M --> OOF["OOF<br>trainの各行の予測<br>(5列)"]
+    M --> TP["testの予測<br>5回分の平均<br>(5列)"]
+  end
+  subgraph S2["2段目: 重みを学んで混ぜる"]
+    OOF --> LR["ロジスティック回帰で<br>重みを学ぶ"]
+    Y["trainの答え"] --> LR
+    LR --> W["種類ごとの重み"]
+    W --> MIX["testの予測を<br>重みで混ぜる"]
+    TP --> MIX
+  end
+  PUB["公開OOF<br>(7で追加)"] -.-> OOF
+  PUB -.-> TP
+  MIX --> SUB["提出<br>各行の満足の確率"] --> LB["Kaggleが採点<br>(LB)"]
+```
+
 ### 1段目: 性格の違うモデルをそろえる
 
 4・5でそろえた**5種類**のモデル(LightGBM・XGBoost・CatBoost・RealMLP・TabPFN)の予測を作る。各種類は、trainを5つに分けて**5回学習**する(5種類×5回=25個のモデル)。
