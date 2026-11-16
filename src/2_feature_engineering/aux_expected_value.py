@@ -1,6 +1,6 @@
 """評価1項目の「期待値の列」を作る(公開ノートブックの補助タスク特徴量を、1項目ずつ試すための版)。
 
-目的: 「この人の他の答え方からすると、この項目には何点を付けそうか」を列にして、lgb_fe_check.pyで効果を測る。
+目的: 「この人の他の答え方からすると、この項目には何点を付けそうか」を列にして、lgb_check.pyで効果を測る。
 ひとことで言うと: Wi-Fi以外の列からWi-Fiの点数を当てるモデルを作り、その予想点を特徴量にする。
     実際の点数と予想点のずれが、その人の「この項目への特別な不満・満足」を表す。
 やり方:
@@ -12,7 +12,7 @@
     投稿者の報告では、期待値の列は効き、「その点数の起こりにくさ」の列は効かなかった。
   - カテゴリ列(Class・Type of Travel・Customer Type)は順序のある整数に置き換えて同じ計算をする
     (Class: Eco=0・Eco Plus=1・Business=2 / 2値の列はP(1)=その値である確率になる)。
-実行: python 2_feature_engineering/aux_expected_value.py --col "Online boarding" --name boarding
+実行: python src/2_feature_engineering/aux_expected_value.py --col "Online boarding" --name boarding
 """
 import argparse
 import time
@@ -27,7 +27,7 @@ ap.add_argument("--col", required=True)
 ap.add_argument("--name", required=True)
 args = ap.parse_args()
 
-FEATS = [  # lgb_fe_check.pyのBASE(生の20列)とGender。予想する列自身は除く
+FEATS = [  # features.pyのBASE(生の20列)とGender。予想する列自身は除く
     "Online boarding", "Class", "Inflight entertainment", "Inflight wifi service", "Seat comfort",
     "Flight Distance", "Type of Travel", "On-board service", "Cleanliness", "Leg room service", "Age",
     "Ease of Online booking", "Baggage handling", "Checkin service", "Food and drink", "Gate location",

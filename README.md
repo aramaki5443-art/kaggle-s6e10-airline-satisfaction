@@ -44,20 +44,20 @@ CVで選んだ①が、全提出の中でPrivateの最高点でした。
 
 ## 取り組みの流れ
 
-フォルダの番号は、この表の段階と対応しています。
+コードは`src/`の下に、この表の段階と同じ番号のフォルダで置いています。
 
 | 段階 | やったこと | 主な結果(OOF AUC) | コード |
 |---|---|---|---|
-| [1. EDA](#1-eda) | 単変量AUC、クロス集計、評価「0点」の意味、客層ごとのヒートマップ | 評価の効き方が客層で変わることを発見 | `1_eda/` |
-| [2. 特徴量エンジニアリング](#2-特徴量エンジニアリング) | LightGBMで1つずつ足し、CVの分け方3通りで判定 | 生の20列 0.95846 → 特徴量込み 0.96046(既定ハイパラ) | `2_feature_engineering/` |
-| [3. モデル作成](#3-モデル作成) | LightGBM・XGBoost・CatBoost・RealMLP・TabPFN(RealMLP・TabPFNは公開ノートブックの再現) | 単体 0.9608〜0.9611 | `3_models/` |
-| [4. ハイパラ調整](#4-ハイパラ調整) | Optuna(LightGBM・XGBoost、CatBoostはKaggleのGPU) | LightGBM単体+0.00041、混ぜると+0.000046 → 性格の違うモデルを増やす方に方針を切り替え | `4_tuning/` |
-| [5. アンサンブル](#5-アンサンブル) | logitを入力にしたロジスティック回帰のスタッキング(別の分け方で公平に評価) | 5モデルで0.961685(伸びの多くはTabPFN) | `5_ensemble/` |
-| [6. 公開OOFの取り込み](#6-公開oofの取り込み) | 点検した公開OOFをスタックに追加し、2段目をロジスティック回帰8割+浅いLightGBM 2割に | 226本で0.962266 | `5_ensemble/`のスクリプトで評価 |
+| [1. EDA](#1-eda) | 単変量AUC、クロス集計、評価「0点」の意味、客層ごとのヒートマップ | 評価の効き方が客層で変わることを発見 | `src/1_eda/` |
+| [2. 特徴量エンジニアリング](#2-特徴量エンジニアリング) | LightGBMで1つずつ足し、CVの分け方3通りで判定 | 生の20列 0.95846 → 特徴量込み 0.96046(既定ハイパラ) | `src/2_feature_engineering/` |
+| [3. モデル作成](#3-モデル作成) | LightGBM・XGBoost・CatBoost・RealMLP・TabPFN(RealMLP・TabPFNは公開ノートブックの再現) | 単体 0.9608〜0.9611 | `src/3_models/` |
+| [4. ハイパラ調整](#4-ハイパラ調整) | Optuna(LightGBM・XGBoost、CatBoostはKaggleのGPU) | LightGBM単体+0.00041、混ぜると+0.000046 → 性格の違うモデルを増やす方に方針を切り替え | `src/4_tuning/` |
+| [5. アンサンブル](#5-アンサンブル) | logitを入力にしたロジスティック回帰のスタッキング(別の分け方で公平に評価) | 5モデルで0.961685(伸びの多くはTabPFN) | `src/5_ensemble/` |
+| [6. 公開OOFの取り込み](#6-公開oofの取り込み) | 点検した公開OOFをスタックに追加し、2段目をロジスティック回帰8割+浅いLightGBM 2割に | 226本で0.962266 | `src/5_ensemble/`のスクリプトで評価 |
 
 ## 1. EDA
 
-**コード:** [1_eda/EDA.ipynb](1_eda/EDA.ipynb)(全8節、出力付き。グラフと節ごとの考察はノートブックにあります)
+**コード:** [src/1_eda/EDA.ipynb](src/1_eda/EDA.ipynb)(全8節、出力付き。グラフと節ごとの考察はノートブックにあります)
 
 施策につながった主な発見は次のとおりです。
 
@@ -70,16 +70,16 @@ CVで選んだ①が、全提出の中でPrivateの最高点でした。
 
 ## 2. 特徴量エンジニアリング
 
-**コード:** `2_feature_engineering/`
+**コード:** `src/2_feature_engineering/`(候補の判定は`src/3_models/lgb_check.py`で行う)
 
 | スクリプト | 役割 |
 |---|---|
 | `lgb_forward_add.py` | 生の列を、単体の強さの順に1つずつ足して効果を確かめる |
-| `aux_expected_value.py` | 「他の列から予想した評価の期待値」の列を作る(`lgb_fe_check.py`の入力) |
-| `lgb_fe_check.py` | 特徴量を作り、LightGBMで「なし」と「あり」を3通りの分け方で比べて採否を判定する。最終のLightGBMもこのスクリプト |
+| `features.py` | 特徴量の定義(候補の作り方・採用した特徴量の一覧・Target Encoding)。モデルのスクリプトはすべてここから特徴量を読み込む |
+| `aux_expected_value.py` | 「他の列から予想した評価の期待値」の列を作る(`features.py`の入力) |
 | `shap_report.py` | 採用した特徴量がどの向きにどれだけ効いているかを、SHAP(予測を列ごとの寄与に分解したもの)で確かめる |
 
-候補は1つずつ「今の土台」と「土台+候補」を比べ、[検証の仕方](#検証の仕方)の基準を満たしたものだけを土台に加えました。
+候補は1つずつ「今の土台」と「土台+候補」をLightGBM(`src/3_models/lgb_check.py --fe 候補名`)で比べ、[検証の仕方](#検証の仕方)の基準を満たしたものだけを土台に加えました。
 
 **効いたもの**
 
@@ -99,12 +99,13 @@ CVで選んだ①が、全提出の中でPrivateの最高点でした。
 
 ## 3. モデル作成
 
-**コード:** `3_models/`(LightGBMは`2_feature_engineering/lgb_fe_check.py`)
+**コード:** `src/3_models/`
 
 | スクリプト | 役割 |
 |---|---|
+| `lgb_check.py` | LightGBMの学習。特徴量の候補を1つ足して「なし」と「あり」を比べ、採否を判定する(2の判定に使用)。最終のLightGBMもこのスクリプト |
 | `xgb_check.py` | XGBoostをLightGBMと同じ特徴量で学習し、混ぜる価値があるかを診断する |
-| `catboost_kaggle.py` | CatBoostを学習し、混ぜる価値があるかを調べる(KaggleのGPUで実行。入力は`lgb_fe_check.py --export-fe`で書き出す) |
+| `catboost_kaggle.py` | CatBoostを学習し、混ぜる価値があるかを調べる(KaggleのGPUで実行。入力は`lgb_check.py --export-fe`で書き出す) |
 
 - 木のモデル3つ(LightGBM・XGBoost・CatBoost)は自分で実装しました。RealMLP・TabPFNは公開ノートブックの再現なので、このリポジトリにはコードを含めていません。
 - 単体のOOF AUCは0.9608〜0.9611でした。
@@ -113,7 +114,7 @@ CVで選んだ①が、全提出の中でPrivateの最高点でした。
 
 ## 4. ハイパラ調整
 
-**コード:** `4_tuning/lgb_optuna.py`(Optunaによる探索)
+**コード:** `src/4_tuning/lgb_optuna.py`(Optunaによる探索)
 
 - 調整でLightGBM単体は+0.00041伸びましたが、ほかのモデルと混ぜると+0.000046に縮みました。
 - 予測の順位相関(1に近いほど同じ予測)を確かめると、調整後のLightGBMと混ぜ相手のRealMLPの相関が0.962→0.970に上がっていました。調整でLightGBMがRealMLPに似て、伸びた分の多くが重なったと考えました。
@@ -121,7 +122,7 @@ CVで選んだ①が、全提出の中でPrivateの最高点でした。
 
 ## 5. アンサンブル
 
-**コード:** `5_ensemble/stack_check.py`(2段目のモデルを、1段目とは別の分け方で公平に評価する)
+**コード:** `src/5_ensemble/stack_check.py`(2段目のモデルを、1段目とは別の分け方で公平に評価する)
 
 - **性格の違うモデルを足す:** 木と仕組みの違うTabPFNを足すと、木との相関は0.961〜0.965と低く、4モデルのスタックが+0.000140伸びました(5fold全てで改善)。RealMLP・TabPFNを木と混ぜた効果は、LBで+0.001でした。
 - 5モデルのスタックはOOF 0.961685でした。
@@ -138,7 +139,7 @@ CVで選んだ①が、全提出の中でPrivateの最高点でした。
 
 ## 6. 公開OOFの取り込み
 
-**コード:** 評価は`5_ensemble/stack_check.py`と同じ方法です。公開OOFそのものと、それを読み込む処理は他の参加者の成果物なので含めていません。
+**コード:** 評価は`src/5_ensemble/stack_check.py`と同じ方法です。公開OOFそのものと、それを読み込む処理は他の参加者の成果物なので含めていません。
 
 他の参加者が公開したOOF予測(trainでの予測とtestの予測のセット)を、自分のスタックに加えました。混ぜるだけなら簡単ですが、質の悪いものや、答えを見て作られた甘いものが混ざると、CVの点数だけが上がってPrivateで崩れます。そのため次の順で進めました。
 
@@ -183,11 +184,12 @@ CVで選んだ①が、全提出の中でPrivateの最高点でした。
 ## フォルダ構成
 
 ```
-1_eda/                   EDA.ipynb(出力付き、節ごとの考察つき)
-2_feature_engineering/   lgb_forward_add.py、aux_expected_value.py、lgb_fe_check.py、shap_report.py
-3_models/                xgb_check.py、catboost_kaggle.py
-4_tuning/                lgb_optuna.py
-5_ensemble/              stack_check.py
+src/
+  1_eda/                   EDA.ipynb(出力付き、節ごとの考察つき)
+  2_feature_engineering/   features.py、lgb_forward_add.py、aux_expected_value.py、shap_report.py
+  3_models/                lgb_check.py、xgb_check.py、catboost_kaggle.py
+  4_tuning/                lgb_optuna.py
+  5_ensemble/              stack_check.py
 ```
 
 ## 再現手順
@@ -195,9 +197,9 @@ CVで選んだ①が、全提出の中でPrivateの最高点でした。
 ```bash
 uv sync
 # コンペのページからtrain.csvとtest.csvをdata/に置く
-python 2_feature_engineering/lgb_fe_check.py --help   # 各スクリプト冒頭のdocstringに目的と使い方を書いています
-python 2_feature_engineering/aux_expected_value.py --col "Online boarding" --name boarding
-python 2_feature_engineering/lgb_fe_check.py --fe none --export-fe   # catboost_kaggle.pyの入力(data/fe36_*.csv)を書き出す
+python src/3_models/lgb_check.py --help   # 各スクリプト冒頭のdocstringに目的と使い方を書いています
+python src/2_feature_engineering/aux_expected_value.py --col "Online boarding" --name boarding
+python src/3_models/lgb_check.py --fe none --export-fe   # catboost_kaggle.pyの入力(data/fe36_*.csv)を書き出す
 ```
 
 スクリプトはリポジトリのルートで実行します。

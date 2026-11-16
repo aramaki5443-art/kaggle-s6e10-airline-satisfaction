@@ -3,7 +3,7 @@
 目的: 特徴量重要度(gain・分岐回数)とSHAPで、各列の寄与の大きさ・向き・列どうしの組み合わせ効果を確認する。
 ひとことで言うと: 1人ずつの予測を「基準値+列ごとの押し上げ/押し下げ」に分解し、それを全員分集めて眺める。
 やり方:
-  - 入力は lgb_fe_check.py --shap N が保存した data/shap_lgb_<tag>.npz(SHAP値・元の値)と、モデル・抜き出した行。
+  - 入力は lgb_check.py --shap N が保存した data/shap_lgb_<tag>.npz(SHAP値・元の値)と、モデル・抜き出した行。
   - 表: 列ごとの平均|SHAP|(大きさ)・gain・分岐回数の順位と割合、SHAPと値の順位相関(+なら値が大きいほど満足側)。
   - 図(data/shap/<tag>/): ①平均|SHAP|の棒グラフ ②beeswarm(点1つが1人。横軸SHAP、色が値の大小)
     ③上位列と遅延の依存図(横軸=列の値、縦軸=SHAP、色=最も組み合わせ効果が強い相手の列)
@@ -11,7 +11,7 @@
   - SHAPの単位はlogit(対数オッズ)。+1は「満足のオッズを約2.7倍にする向きに押した」の意味。
 なぜ: gainは「学習中にどれだけ損失を減らしたか」で、分岐回数は「何回使われたか」。どちらも向きが分からず、
   数値の種類が多い列(距離など)で大きく出やすい。SHAPは予測そのものを分解するので、向きと組み合わせ効果まで見られる。
-使い方: python 2_feature_engineering/shap_report.py --tag shap_tuned [--inter 3000]
+使い方: python src/2_feature_engineering/shap_report.py --tag shap_tuned [--inter 3000]
 """
 import argparse
 import os
