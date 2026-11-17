@@ -3,7 +3,7 @@
 目的: 特徴量エンジニアリングの施策を1つずつ、同じ条件でベースラインと比べる。最終のLightGBM(--predict)もこのスクリプト。
 ひとことで言うと: 「いつもの列」+「試したい列」で学習し直し、ベースラインと同じ行どうしで成績を比べる。
 やり方:
-  - 特徴量の定義(BASE・FE・ADOPTED・TE)は src/2_lgb_baseline_fe/features.py から読み込む。
+  - 特徴量の定義(BASE・FE・ADOPTED・TE)は src/3_lgb_baseline_fe/features.py から読み込む。
   - ベースラインは生の20列(lgb_forward_add.py --n 20と同一)+採用済みのFE(ADOPTED)。`--fe 名前`でFEに登録した列を足す。
     比較相手のOOFは、最後に採用したFEを足したときのOOF(BASE_OOF)。FEを採用したらfeatures.pyのADOPTEDとここのBASE_OOFを更新する。
   - 比較は対応のあるブートストラップ(同じ行を復元抽出して、2つのOOFのAUC差を100回計算)で、差の揺れも出す。
@@ -13,7 +13,7 @@
     検証用の行はコンペのデータのままなので、OOFは今までと同じ物差しで比べられる。元データの行もTEの満足率の計算に入る。
   - `--shap N`: fold0だけ学習し、検証foldからN行を抜き出してSHAP値(各列が予測をどれだけ押し上げ/押し下げたか)を
     LightGBM内蔵のTreeSHAP(pred_contrib)で計算し、data/shap_lgb_<tag>.npzに保存して終わる(図はshap_report.py)。
-実行: python src/2_lgb_baseline_fe/lgb_check.py --fe zero_flags
+実行: python src/3_lgb_baseline_fe/lgb_check.py --fe zero_flags
 """
 import argparse
 import json
