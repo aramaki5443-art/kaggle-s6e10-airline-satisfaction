@@ -26,7 +26,7 @@ config:
     rankSpacing: 40
 ---
 flowchart TD
-  S1["<b>1. EDA</b><br>データを理解し、特徴量の着想を得る"]
+  S1["<b>1. EDA</b><br>データを理解し、特徴量エンジニアリングの着想を得る"]
   S2["<b>2. LightGBMでベースライン作成と特徴量エンジニアリング</b><br>軽く、欠損値もそのまま扱えるLightGBMで特徴量を1つずつ試す｜Private 0.95910 → 0.96102"]
   S3["<b>3. 別モデル(RealMLP)を導入</b><br>LightGBMとの順位相関が0.964と低く、混ぜるとOOF +0.000888｜Private 0.96192"]
   S4["<b>4. LightGBMのハイパラ調整</b><br>単体は+0.00041伸びたが、RealMLPと混ぜると+0.000046｜Private 0.96189"]
