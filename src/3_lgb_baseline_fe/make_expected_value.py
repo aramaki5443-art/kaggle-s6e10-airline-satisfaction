@@ -28,7 +28,7 @@ ap.add_argument("--col", required=True)
 ap.add_argument("--name", required=True)
 args = ap.parse_args()
 
-FEATS = [  # features.pyのBASE(生の20列)とGender。予想する列自身は除く
+FEATS = [  # features.pyのBASE(元の特徴量20個)とGender。予想する列自身は除く
     "Online boarding", "Class", "Inflight entertainment", "Inflight wifi service", "Seat comfort",
     "Flight Distance", "Type of Travel", "On-board service", "Cleanliness", "Leg room service", "Age",
     "Ease of Online booking", "Baggage handling", "Checkin service", "Food and drink", "Gate location",

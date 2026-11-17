@@ -8,12 +8,12 @@
     キーのまま受け取り、foldごとに計算する(te_fold・te_mapはfeatures.pyと同一)。
   - Class・Type of Travel・Customer TypeはCatBoostのカテゴリ列として渡す(CatBoost独自の、答えを順番に使う集計で数値化される)。
   - 学習率0.05、木の本数は検証foldでの早期停止(100本)で決める(LightGBM・XGBoostの判定と同じ条件)。ほかは既定(depth 6等)。
-  - RUNSの各行(タグ, fold分割のseed, 生の20列だけか, 上書きするハイパラ, 距離の扱い)を順に学習し、oof_cat_<タグ>.npy・test_cat_<タグ>.npyを保存。
+  - RUNSの各行(タグ, fold分割のseed, 元の特徴量20個だけか, 上書きするハイパラ, 距離の扱い)を順に学習し、oof_cat_<タグ>.npy・test_cat_<タグ>.npyを保存。
   - 距離の扱い: None=数値のまま。"add"=数値の列は残し、同じ値の文字列コピーdist_catをカテゴリ列として足す。
     "rep"=Flight Distanceの数値列そのものをカテゴリ列に置き換える。このコンペで一番効いたのは距離を路線IDとして扱うこと
     (TEの2列)なので、CatBoost独自のカテゴリ処理(答えを行の順番に使う集計+カテゴリ同士の組み合わせ)で距離を扱えば、
     LightGBMのTEとは違う予測になる可能性がある。
-    "allcat"=生の20列(数値・評価・カテゴリ)を全て文字列にしてカテゴリ列に置き換える(作り込み16列・TEはそのまま)。
+    "allcat"=元の特徴量20個(数値・評価・カテゴリ)を全て文字列にしてカテゴリ列に置き換える(作り込み16列・TEはそのまま)。
     公開ノートブックで全列カテゴリ化+自前TEなしが単体+0.00015。まず「全列カテゴリ化」だけを切り分ける。
     "allcat_note"=allcatに加えてTEの2列を外す(allcatとの差がTEを外した効果)。
   - ローカル実行: /kaggle/inputが無ければdata/fe36_*.csvを読み、CPU(8スレッド)で学習してdata/に保存する。
@@ -39,7 +39,7 @@ RUNS = [("allcat_t21_cv42", 42, False, T21, "allcat"), ("allcat_t21_cv0", 0, Fal
         ("allcat_t21_cv1", 1, False, T21, "allcat"), ("allcat_cv0", 0, False, {}, "allcat"), ("allcat_cv1", 1, False, {}, "allcat")]
 CAT = ["Customer Type", "Type of Travel", "Class"]
 TE = {"te_distance_m3": ("Flight Distance", 3), "te_dist_class": (["Flight Distance", "Class"], 3)}
-RAW_N = 20  # 先頭20列が生の列(features.pyのBASE)
+RAW_N = 20  # 先頭20列が元の特徴量(features.pyのBASE)
 
 hit = glob.glob("/kaggle/input/**/fe36_train.csv", recursive=True)
 KAGGLE = bool(hit)
@@ -76,7 +76,7 @@ for tag, cv_seed, raw_only, over, dist in RUNS:
     cats = [c for c in CAT if c in X]
     if dist == "allcat_note":  # 全列カテゴリ化に加え、自前のTE2列を外してCatBoost独自の集計だけに任せる
         X, Xt = X.drop(columns=list(TE)), Xt.drop(columns=list(TE))
-    if dist in ("allcat", "allcat_note"):  # 生の20列を全てカテゴリ列に(欠損は"-1"の文字列。pandasのstr型は欠損をNaNのまま残すため先に埋める)
+    if dist in ("allcat", "allcat_note"):  # 元の特徴量20個を全てカテゴリ列に(欠損は"-1"の文字列。pandasのstr型は欠損をNaNのまま残すため先に埋める)
         raw = list(X.columns[:RAW_N])
         X = X.assign(**{c: X[c].fillna(-1).astype(str) for c in raw})
         Xt = Xt.assign(**{c: Xt[c].fillna(-1).astype(str) for c in raw})

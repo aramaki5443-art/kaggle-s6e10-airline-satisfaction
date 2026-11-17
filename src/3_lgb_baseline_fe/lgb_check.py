@@ -4,7 +4,7 @@
 ひとことで言うと: 「いつもの列」+「試したい列」で学習し直し、ベースラインと同じ行どうしで成績を比べる。
 やり方:
   - 特徴量の定義(BASE・FE・ADOPTED・TE)は src/3_lgb_baseline_fe/features.py から読み込む。
-  - ベースラインは生の20列(lgb_forward_add.py --n 20と同一)+採用済みのFE(ADOPTED)。`--fe 名前`でFEに登録した列を足す。
+  - ベースラインは元の特徴量20個(lgb_forward_add.py --n 20と同一)+採用済みのFE(ADOPTED)。`--fe 名前`でFEに登録した列を足す。
     比較相手のOOFは、最後に採用したFEを足したときのOOF(BASE_OOF)。FEを採用したらfeatures.pyのADOPTEDとここのBASE_OOFを更新する。
   - 比較は対応のあるブートストラップ(同じ行を復元抽出して、2つのOOFのAUC差を100回計算)で、差の揺れも出す。
     feature_fractionは既定の1.0なので、列を足しても既存の木の列の選ばれ方は変わらない(公平比較)。

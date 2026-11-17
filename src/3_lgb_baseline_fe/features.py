@@ -1,10 +1,10 @@
-"""特徴量の定義: 生の列の一覧、特徴量の候補(FE)、採用した特徴量(ADOPTED)、Target Encoding(TE)。
+"""特徴量の定義: 元の特徴量の一覧、特徴量の候補(FE)、採用した特徴量(ADOPTED)、Target Encoding(TE)。
 
 目的: 特徴量の作り方を1か所にまとめ、どのモデルのスクリプトからも同じ特徴量を使えるようにする。
 ひとことで言うと: 「材料の下ごしらえ」の手順書。学習や採点はしない(それは同じフォルダの lgb_check.py などが行う)。
 やり方:
   - FE: 名前 → 関数(データを受け取り、足す列を返す)。候補は src/3_lgb_baseline_fe/lgb_check.py --fe 名前 で1つずつ判定する。
-  - ADOPTED: 判定で採用した特徴量の名前。モデルのスクリプトは生の20列(BASE)+ADOPTEDで学習する。
+  - ADOPTED: 判定で採用した特徴量の名前。モデルのスクリプトは元の特徴量20個(BASE)+ADOPTEDで学習する。
   - TE: 値ごとの満足率の列。答えを使うので、FEでは元の値だけを置き、学習ループの中でfoldごとに満足率へ置き換える(te_fold)。
 なぜ: LightGBM・XGBoost・ハイパラ探索で特徴量の定義が食い違わないようにするため。
 """
@@ -14,7 +14,7 @@ import pandas as pd
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold
 
-BASE = [  # lgb_forward_add.pyのORDER[:20](Genderを除く生の20列)
+BASE = [  # lgb_forward_add.pyのORDER[:20](Genderを除く元の特徴量20個)
     "Online boarding", "Class", "Inflight entertainment", "Inflight wifi service", "Seat comfort",
     "Flight Distance", "Type of Travel", "On-board service", "Cleanliness", "Leg room service", "Age",
     "Ease of Online booking", "Baggage handling", "Checkin service", "Food and drink", "Gate location",
@@ -290,7 +290,7 @@ TEACHER_PUB = dict(objective="binary", n_estimators=600, learning_rate=0.05, max
 
 
 def orig_teacher_fe(name, params=None):
-    # 元データ(ノイズが少なく、生の20列だけでAUC 0.995)だけで学習したLightGBMの予測を1列として渡す。元データを
+    # 元データ(ノイズが少なく、元の特徴量20個だけでAUC 0.995)だけで学習したLightGBMの予測を1列として渡す。元データを
     # 行として足す方法は悪化したが、公開ノートブック3件で予測を列にする方法は
     # +0.00055〜+0.00072。教師モデルはコンペのラベルを一切見ないため、foldの外で作ってもリークにならない。
     # params=None: 既定ハイパラ(PARAMS)で、元データの20%で早期終了して本数を決め全体に学習し直す
@@ -319,7 +319,7 @@ def orig_teacher_fe(name, params=None):
 
 
 def orig_rate(d, m=10, cols=None):
-    # 生の20列それぞれについて、元データでの「その値の人の満足率」を1列ずつ渡す(+20列、公開ノートブックの`org`)。
+    # 元の特徴量20個それぞれについて、元データでの「その値の人の満足率」を1列ずつ渡す(+20列、公開ノートブックの`org`)。
     # 先生役(1つのモデルの確信)と違い、列ごとの単純な平均なので強い確信を持ち込みにくい。先生役と同じくPublicで
     # 下がるかを確かめる。少数の値の極端な率を抑えるため全体の満足率へm件分寄せる。元データに無い値は欠損
     o = pd.concat([pd.read_csv(f"data/original/{f}.csv") for f in ("train", "test")], ignore_index=True)
@@ -347,7 +347,7 @@ def route_mean(name, col):
 
 def eq_flag(name, pairs):
     # 評価の一致フラグ(4種とも不採用): 2つの評価の点数が等しいか。時刻の便利さとゲートの場所は、点数が等しいと満足率54〜69%、
-    # 違うと7〜36%。木は生の2列から『等しい』を作るのに対角線を何度も分ける必要があるので、1列で渡す。
+    # 違うと7〜36%。木は元の2つの特徴量から『等しい』を作るのに対角線を何度も分ける必要があるので、1列で渡す。
     # pairsが複数なら、等しいペアの数
     def f(d):
         return pd.DataFrame({name: sum((d[a] == d[b]).astype(int) for a, b in pairs)}, index=d.index)
@@ -413,7 +413,7 @@ def aux_ev(name):
 
 def route_diff(name, col):
     # 自分の評価−路線平均(公開ノートブックのアイデア): 路線平均(route_mean、rp_legroomで採用)は路線の乗客の傾向だが、こちらは
-    # 「この路線の乗客の中で、この人は甘いか辛いか」。木は生の評価と路線平均の2列を分岐で引き算できないので新しい情報になりうる
+    # 「この路線の乗客の中で、この人は甘いか辛いか」。木は元の評価と路線平均の2列を分岐で引き算できないので新しい情報になりうる
     def f(d):
         m = route_mean("_m", col)(d)["_m"]
         return pd.DataFrame({name: d[col].values - m.values}, index=d.index)
@@ -422,7 +422,7 @@ def route_diff(name, col):
 
 def digits(name, col):
     # 桁の特徴量(公開ノートブックのアイデア): 値の各桁 floor(x/10^k)%10(k=0〜3、値が1種類しかない桁は除く)。人工データの生成で
-    # 「末尾が0の距離」のような桁のクセが残っていれば、木が生の値の大小の分岐では作れない区別(例: 末尾が0の値をまとめる)を渡せる。
+    # 「末尾が0の距離」のような桁のクセが残っていれば、木が元の値の大小の分岐では作れない区別(例: 末尾が0の値をまとめる)を渡せる。
     # 欠損(到着遅延)は欠損のまま(0で埋めると遅延0分と混ざるため)
     def f(d):
         v = d[col].astype(float)
@@ -466,7 +466,7 @@ def none(d):
 
 
 def gender(d):
-    # 生のGender列を戻す。前向き追加では効かなかったが、当時は21列。TEの事前確認で今のモデルの残差との
+    # 元のGenderを戻す。前向き追加では効かなかったが、当時は21列。TEの事前確認で今のモデルの残差との
     # 相関+0.0037(組み合わせのTEと同程度)だったため、事前確認で落とさず学習で確かめる
     return pd.DataFrame({"Gender": d["Gender"].astype("category")})
 
@@ -566,6 +566,6 @@ FE.update({"rs_wifi5": route_share("rs_wifi5", "Inflight wifi service", 5),  # �
 TE.update({"te_dist10": (None, 3), "te_dist100": (None, 3)})
 FE.update({"te_dist10": lambda d: pd.DataFrame({"te_dist10": d["Flight Distance"] // 10}, index=d.index),
            "te_dist100": lambda d: pd.DataFrame({"te_dist100": d["Flight Distance"] // 100}, index=d.index)})
-DROP = {"drop_gate": ["Gate location"], "drop_dep": ["Departure Delay in Minutes"], "drop_arr": ["Arrival Delay in Minutes"]}  # 足すのではなく、生の列を外して効果を見る候補(公開ノートブック、ゲート・遅延2列とも不採用)
+DROP = {"drop_gate": ["Gate location"], "drop_dep": ["Departure Delay in Minutes"], "drop_arr": ["Arrival Delay in Minutes"]}  # 足すのではなく、元の特徴量を外して効果を見る候補(公開ノートブック、ゲート・遅延2列とも不採用)
 FE.update({k: none for k in DROP})
 ADOPTED = ["comfort_gate_business", "gate_onboard", "te_distance_m3", "te_dist_class", "freq_dist_travel", "comfort_gate_loyal_business", "rp_legroom", "ev_boarding", "ev_legroom", "ev_checkin", "ev_time", "ctx_ctc", "rsd_wifi"]  # 採用済みのFE(3seed再確認後。先生役orig_teacher_pubはOOFで改善するがPublic LBで3構成とも悪化したため外した)

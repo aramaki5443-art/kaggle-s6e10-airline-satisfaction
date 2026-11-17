@@ -4,7 +4,7 @@
 ひとことで言うと: LightGBM・XGBoostの調整と同じやり方を、CatBoostの6つのつまみに当てはめる。
 やり方:
   - データ・TE・全列カテゴリ化はcatboost_kaggle.pyと同一(入力はlgb_check.py --export-feで書き出したfe36_*.csv。
-    Kaggleではデータセットとして読み込ませる。生の20列を文字列のカテゴリ列に、TEの2列はfoldごとに計算)。
+    Kaggleではデータセットとして読み込ませる。元の特徴量20個を文字列のカテゴリ列に、TEの2列はfoldごとに計算)。
     fold分割はseed42の5fold、学習率0.05、早期停止100本。TEはfoldごとに1回だけ計算して使い回す。
   - つまみ: depth 4〜10・l2_leaf_reg 1〜30・border_count 32/64/128/254・random_strength 0.1〜10・bagging_temperature 0〜1・
     max_ctr_complexity 1〜4(カテゴリ列を何列まで組み合わせて集計するか)。1回目は既定の設定。
@@ -30,7 +30,7 @@ from sklearn.model_selection import StratifiedKFold
 
 N_TRIALS, LIMIT_H = 30, 10.8
 TE = {"te_distance_m3": ("Flight Distance", 3), "te_dist_class": (["Flight Distance", "Class"], 3)}
-RAW_N = 20  # 先頭20列が生の列(features.pyのBASE)
+RAW_N = 20  # 先頭20列が元の特徴量(features.pyのBASE)
 T0 = time.time()
 os.makedirs("optuna_cat", exist_ok=True)
 
