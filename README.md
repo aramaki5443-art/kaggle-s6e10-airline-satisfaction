@@ -166,16 +166,16 @@ EDAで、データの大まかな特徴をつかみ、特徴量エンジニア�
 
 - **作成理由:** 5の結果から、単体を強くするより、混ぜる相手の種類を増やす方が伸びると考えた。木の仲間(XGBoost・CatBoost)に加え、木ともニューラルネットとも仕組みの違うTabPFNを用意した。
 - **やり方:**
-  - XGBoost: LightGBMと同じ36列で学習し、Optunaで調整(50試行)。
-  - CatBoost: KaggleのGPUで学習し、Optunaで調整(30試行)。公開ノートブックの「全列カテゴリ化+TEなし」(+0.00015の報告)を2つに分けて試し、全列カテゴリ化(+0.000187)だけを採用した(TEを外すのは±0)。
+  - XGBoost: LightGBMと同じ36列で学習し、Optunaでハイパラ調整(50試行)。
+  - CatBoost: KaggleのGPUで学習し、Optunaでハイパラ調整(30試行)。公開ノートブックの「全列カテゴリ化+TEなし」(+0.00015の報告)を2つに分けて試し、全列カテゴリ化(+0.000187)だけを採用した(TEを外すのは±0)。
   - TabPFN: 事前学習済みの表データ用モデル。公開ノートブックを参考にしたため、コードは含めない。
-- **結果:** 調整で単体はXGBoost +0.000244・CatBoost +0.000076伸びた。5モデルの単体の強さはほぼ同じ(0.9608〜0.9612)で、予測の似かたが違った。木どうし(LightGBM・XGBoost・CatBoost)の順位相関は0.979〜0.992と高く、TabPFNは他の4モデルと0.961〜0.966と低い。
+- **結果:** ハイパラ調整で単体はXGBoost +0.000244・CatBoost +0.000076伸びた。5モデルの単体の強さはほぼ同じ(0.9608〜0.9612)で、予測の似かたが違った。木どうし(LightGBM・XGBoost・CatBoost)の順位相関は0.979〜0.992と高く、TabPFNは他の4モデルと0.961〜0.966と低い。
 
 **表: 単体OOFと、モデルどうしの予測の順位相関(1に近いほど似た予測)**
 
 | モデル | 単体OOF | LightGBMとの相関 | XGBoostとの相関 | CatBoostとの相関 | RealMLPとの相関 | TabPFNとの相関 |
 |---|---|---|---|---|---|---|
-| LightGBM(5で調整) | 0.960869 | − | 0.992 | 0.984 | 0.970 | 0.965 |
+| LightGBM(5でハイパラ調整) | 0.960869 | − | 0.992 | 0.984 | 0.970 | 0.965 |
 | XGBoost | 0.960762 | 0.992 | − | 0.979 | 0.966 | 0.961 |
 | CatBoost | 0.960936 | 0.984 | 0.979 | − | 0.971 | 0.964 |
 | RealMLP(4で導入) | 0.961192 | 0.970 | 0.966 | 0.971 | − | 0.966 |
@@ -187,8 +187,8 @@ EDAで、データの大まかな特徴をつかみ、特徴量エンジニア�
 
 | スクリプト | 役割 |
 |---|---|
-| [xgb_check.py](src/6_models/xgb_check.py)・[xgb_optuna.py](src/6_models/xgb_optuna.py) | XGBoostを同じ特徴量で学習し、混ぜる価値を診断する。Optunaで調整 |
-| [catboost_kaggle.py](src/6_models/catboost_kaggle.py)・[catboost_optuna.py](src/6_models/catboost_optuna.py) | CatBoostを学習する(KaggleのGPU)。Optunaで調整 |
+| [xgb_check.py](src/6_models/xgb_check.py)・[xgb_optuna.py](src/6_models/xgb_optuna.py) | XGBoostを同じ特徴量で学習し、混ぜる価値を診断する。Optunaでハイパラ調整 |
+| [catboost_kaggle.py](src/6_models/catboost_kaggle.py)・[catboost_optuna.py](src/6_models/catboost_optuna.py) | CatBoostを学習する(KaggleのGPU)。Optunaでハイパラ調整 |
 
 ## 7. 5モデルアンサンブル
 
