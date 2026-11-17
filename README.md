@@ -29,7 +29,7 @@ flowchart TD
   S1["<b>1. EDA</b><br>データを理解し、特徴量エンジニアリングの着想を得る"]
   SC["<b>2. 特徴量の採用基準を設ける</b><br>fold分割の乱数(seed)を変えるだけで、特徴量の「あり−なし」のOOFの差が約0.00005揺れる<br>(1) 3seedで評価し、差の平均が+0.00003以上かつ2seed以上で改善なら採用<br>(2) Public LB(約6万行)の小さな差は追わず、OOF(70万行)で判断する<br>(この考え方は、のちのハイパラ・公開OOFの採否にも使った)"]
   S2["<b>3. LightGBMでベースライン作成と特徴量エンジニアリング</b><br>軽く、欠損値もそのまま扱えるLightGBMで特徴量を1つずつ試す<br>ベースラインのPrivate LB 0.95910(上位76%) → 特徴量エンジニアリング後のPrivate LB 0.96102(上位47%)"]
-  S3["<b>4. 別モデル(RealMLP)を導入</b><br>LightGBMとの順位相関が0.964と低く、混ぜるとOOF +0.000888<br>Private LB 0.96192(上位31%)"]
+  S3["<b>4. 別モデル(RealMLP)を導入</b><br>LightGBMと混ぜるとOOF +0.000888<br>Private LB 0.96192(上位31%)"]
   S4["<b>5. LightGBMのハイパラ調整</b><br>LightGBM単体のOOFは+0.00041伸びたが、RealMLPと混ぜるとOOFは+0.000046<br>Private LB 0.96189(上位32%)"]
   S5["<b>6. XGBoost・CatBoost・TabPFN作成</b><br>木どうしは似ている(相関0.98〜0.99)ので、仕組みの違うTabPFNも加える"]
   S6["<b>7. 5モデルアンサンブル</b><br>重みを学んで混ぜる。伸びの多くはTabPFN<br>Private LB 0.96208(上位29%)"]
