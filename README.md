@@ -16,23 +16,23 @@
 
 ## コンペの進め方と段階ごとのスコア
 
-[EDA](#1-eda) → [ベースライン](#2-ベースライン) → [特徴量エンジニアリング](#3-特徴量エンジニアリング) → [モデル作成](#4-モデル作成) → [ハイパラ調整](#5-ハイパラ調整) → [アンサンブル](#6-アンサンブル) → [公開OOFの導入](#7-公開oofの導入) の順に進めた。コードは`src/`の下に、段階と同じ番号のフォルダで置いている。
+[EDA](#1-eda) → [LightGBMでベースライン](#2-ベースライン) → [LightGBMのスコアを見ながら特徴量エンジニアリング](#3-特徴量エンジニアリング) → [伸び悩んだので別モデル(RealMLP)を導入](#4-別モデルの導入) → [LightGBMのハイパラ調整](#5-lightgbmのハイパラ調整) → [XGBoost・CatBoost・TabPFNを加えてアンサンブル](#6-アンサンブル) → [公開OOFの導入](#7-公開oofの導入) の順に進めた。コードは`src/`の下に、段階と同じ番号のフォルダで置いている(4・7はコードなし)。
 
 | 段階 | Private LB | 相当する順位 |
 |---|---|---|
 | 1. EDA | − | − |
 | 2. ベースライン(LightGBM、生の20列) | 0.95910 | 約2,860位(上位76%) |
 | 3. 特徴量エンジニアリング(LightGBM、31列の時点) | 0.96102 | 約1,760位(上位47%) |
-| 4. モデル作成(最初に作ったRealMLPをLightGBMと混ぜた時点) | 0.96192 | 約1,170位(上位31%) |
-| 5. ハイパラ調整(LightGBMをOptunaで調整して差し替え) | 0.96189 | − |
-| 6. アンサンブル(XGBoost・CatBoost・TabPFNも作り、LightGBM・RealMLPと合わせた5モデルでスタッキング) | 0.96208 | 約1,090位(上位29%) |
+| 4. 別モデルの導入(RealMLPをLightGBMと混ぜる) | 0.96192 | 約1,170位(上位31%) |
+| 5. LightGBMのハイパラ調整(調整後のLightGBMとRealMLPを混ぜる) | 0.96189 | − |
+| 6. アンサンブル(XGBoost・CatBoost・TabPFNを加えた5モデルでスタッキング) | 0.96208 | 約1,090位(上位29%) |
 | 7. 公開OOFの導入(最終) | **0.96239** | **52位(上位1.4%)** |
 
 ## 上位1.4%に届いた考察
 
 1. **EDAの発見を特徴量にした:** 「評価の効き方は客層で変わる」などの発見から、LightGBMを0.95846→0.96046に上げた(→[1](#1-eda)・[3](#3-特徴量エンジニアリング))。
 2. **ブレを測ってから採否基準を決めた:** 分け方を変えるだけで差が約0.00005揺れるので、3通りの分け方で判定した(→[検証の仕方](#検証の仕方))。
-3. **調整より、仕組みの違うモデルに時間を使った:** 調整の伸びは混ぜると大きく縮んだ。木と仕組みの違うTabPFNを足す方が伸びた(→[5](#5-ハイパラ調整)・[6](#6-アンサンブル))。
+3. **調整より、仕組みの違うモデルに時間を使った:** 調整の伸びは混ぜると大きく縮んだ。木と仕組みの違うTabPFNを足す方が伸びた(→[5](#5-lightgbmのハイパラ調整)・[6](#6-アンサンブル))。
 4. **公開OOFを点検してから導入した:** 上位との差は「混ぜるモデルの数と種類」と分かり、点検した公開OOFを導入した(OOF+0.00038、LB+0.00043)(→[7](#7-公開oofの導入))。
 5. **最終提出をCVで選んだ:** Public LB(約6万行)は0.0003未満の差を見分けられない。CVで選んだ提出(Public 513位)が、Privateでは52位になった。
 
@@ -58,9 +58,10 @@ EDAで、データの大まかな特徴をつかみ、特徴量エンジニア�
 |---|---|
 | `features.py` | 特徴量の定義(候補・採用した一覧・Target Encoding)。全モデルがここから読み込む |
 | `make_expected_value.py` | 「他の列から予想した評価の期待値」を前もって計算して保存する(重いので判定のたびには計算しない) |
+| `lgb_check.py` | LightGBMの学習と、特徴量の採否の判定。最終のLightGBMもこれ |
 | `shap_report.py` | 採用した特徴量の効き方をSHAPで確かめる |
 
-候補は1つずつ、土台と「土台+候補」をLightGBM(`src/4_models/lgb_check.py --fe 候補名`)で比べ、[検証の仕方](#検証の仕方)の基準で採否を決めた。
+候補は1つずつ、土台と「土台+候補」をLightGBM(`lgb_check.py --fe 候補名`)で比べ、[検証の仕方](#検証の仕方)の基準で採否を決めた。
 
 **採用した特徴量**(生の20列+16列=36列。OOF 0.95846→0.96046)
 
@@ -83,38 +84,44 @@ EDAで、データの大まかな特徴をつかみ、特徴量エンジニア�
 - 数値の桁、GPT-2のトークン区切り、掛け算の交互作用: 伸びなかった。
 - **(例外)外したが効いていた「先生役」:** 元データで学習したモデルの予測を特徴量にする方法。OOFで+0.00038だったが、Public LBの−0.00020を見て外した。Privateでは+0.00025で、誤りだった。
 
-## 4. モデル作成
+## 4. 別モデルの導入
 
-**コード:** `src/4_models/`
+**コード:** なし(RealMLPは公開ノートブックの再現のため含めない)
 
-| スクリプト | 役割 |
-|---|---|
-| `lgb_check.py` | LightGBMの学習と、特徴量の採否の判定(3で使用)。最終のLightGBMもこれ |
-| `xgb_check.py` | XGBoostを同じ特徴量で学習し、混ぜる価値を診断する |
-| `catboost_kaggle.py` | CatBoostを学習する(KaggleのGPU) |
+- **なぜ:** 特徴量を足し続けても、Public LBが0.96002〜0.96007で4日間横ばいになった。木とは仕組みの違うニューラルネット(RealMLP)なら、木が苦手な部分を補えると考えた。
+- **変えた点:** 最良のエポックを採点用のfoldではなく学習側の5%で選び(OOFが甘くならないように)、分け方をLightGBMとそろえた。
+- **結果:** 単体OOF 0.961056で、LightGBM(0.960418)を5foldすべてで上回った。LightGBMとの順位相関は0.964と低く、混ぜるとOOF 0.961306(LightGBMから+0.000888)。Public LBも0.96007→0.96120と、横ばいを抜けた。
 
-- 木3種類は自分で実装。RealMLP・TabPFNは公開ノートブックの再現なので、コードは含めていない。
-- **CatBoostの全列カテゴリ化:** 公開ノートブックの「全列カテゴリ化+TEなし」(+0.00015の報告)を2つに分けて試した。全列カテゴリ化が+0.000187、TEを外すのは±0だったので、前者だけ採用した。
-- **効かなかったもの:** TabM(ニューラルネット)は最も違う予測(順位相関0.94)だったが、単体が0.0024低く、混ぜても重みが付かなかった。
+## 5. LightGBMのハイパラ調整
 
-## 5. ハイパラ調整
+**コード:** `src/5_lgb_tuning/lgb_optuna.py`(Optunaで8つのハイパラを同時に50試行。最良の設定は3通りの分け方で調整前と比べてから採用)
 
-**コード:** `src/5_tuning/`(Optunaで複数のハイパラを同時に探索。最良の設定は3通りの分け方で調整前と比べてから採用)
+| | 調整前 → 調整後 | 伸び |
+|---|---|---|
+| LightGBM単体 | 0.960458 → 0.960869 | +0.00041 |
+| RealMLPと混ぜたとき | 0.961438 → 0.961484 | +0.000046(単体の約1/9) |
 
-| スクリプト | 探索 | 単体の伸び | 混ぜたときの伸び |
-|---|---|---|---|
-| `lgb_optuna.py` | LightGBM、50試行 | +0.00041 | +0.000046 |
-| `xgb_optuna.py` | XGBoost、50試行 | +0.000244 | +0.000005 |
-| `catboost_optuna.py` | CatBoost、KaggleのGPU、30試行 | +0.000076 | +0.000020 |
-
-- **3モデルとも、混ぜると伸びが約1/4〜1/50に縮んだ。** 調整後のモデルが混ぜ相手に似て(例: LightGBMとRealMLPの相関0.962→0.970)、伸びた分が重なった。
-- 木どうしの相関も0.980〜0.992と高い。**そこで、調整より仕組みの違うモデルを増やす方に時間を使った**(→[6](#6-アンサンブル))。
+- **混ぜると伸びが大きく縮んだ。** 調整後のLightGBMがRealMLPに似て(順位相関0.962→0.970)、伸びた分が重なった。Privateでも0.96192→0.96189と伸びなかった。
+- **そこで、調整より仕組みの違うモデルを増やす方に時間を使った**(→[6](#6-アンサンブル))。
 
 ## 6. アンサンブル
 
-**コード:** `src/6_ensemble/stack_check.py`
+**コード:** `src/6_ensemble/`
+
+| スクリプト | 役割 |
+|---|---|
+| `xgb_check.py`・`xgb_optuna.py` | XGBoostを同じ特徴量で学習し、混ぜる価値を診断する。Optunaで調整(50試行) |
+| `catboost_kaggle.py`・`catboost_optuna.py` | CatBoostを学習する(KaggleのGPU)。Optunaで調整(30試行) |
+| `stack_check.py` | 5モデルのスタッキングと、その公平な評価 |
 
 **目的:** 仕組みの違う強いモデルを混ぜて、得意・不得意を補い合い、AUCを上げる。
+
+### 加えたモデル
+
+- **XGBoost・CatBoost:** 自分で実装。CatBoostは、公開ノートブックの「全列カテゴリ化+TEなし」(+0.00015の報告)を2つに分けて試し、全列カテゴリ化(+0.000187)だけを採用した(TEを外すのは±0)。
+- **TabPFN:** 事前学習済みの表データ用モデル。公開ノートブックを参考にしたため、コードは含めない。
+- **XGBoost・CatBoostの調整も、混ぜると伸びが縮んだ:** 単体の伸びはXGBoost +0.000244・CatBoost +0.000076、混ぜたときは+0.000005・+0.000020。木どうしの相関は0.980〜0.992と高く、役割が重なっていた。
+- **効かなかったもの:** TabM(ニューラルネット)は最も違う予測(順位相関0.94)だったが、単体が0.0024低く、混ぜても重みが付かなかった。
 
 **図: アンサンブルの流れ(1段目・2段目の入力と出力)**
 
@@ -272,10 +279,9 @@ flowchart LR
 src/
   1_eda/                   EDA.ipynb
   2_baseline/              lgb_forward_add.py
-  3_feature_engineering/   features.py、make_expected_value.py、shap_report.py
-  4_models/                lgb_check.py、xgb_check.py、catboost_kaggle.py
-  5_tuning/                lgb_optuna.py、xgb_optuna.py、catboost_optuna.py
-  6_ensemble/              stack_check.py
+  3_feature_engineering/   features.py、make_expected_value.py、lgb_check.py、shap_report.py
+  5_lgb_tuning/            lgb_optuna.py
+  6_ensemble/              xgb_check.py、xgb_optuna.py、catboost_kaggle.py、catboost_optuna.py、stack_check.py
 ```
 
 ## 再現手順
@@ -289,9 +295,9 @@ python src/3_feature_engineering/make_expected_value.py --col "Leg room service"
 python src/3_feature_engineering/make_expected_value.py --col "Checkin service" --name checkin
 python src/3_feature_engineering/make_expected_value.py --col "Departure/Arrival time convenient" --name time
 # 2. LightGBM(採用した特徴量で学習。--helpで各オプションの説明)
-python src/4_models/lgb_check.py --fe none
+python src/3_feature_engineering/lgb_check.py --fe none
 # 3. CatBoostの入力(data/fe36_*.csv)を書き出す
-python src/4_models/lgb_check.py --fe none --export-fe
+python src/3_feature_engineering/lgb_check.py --fe none --export-fe
 ```
 
 ## 開発について

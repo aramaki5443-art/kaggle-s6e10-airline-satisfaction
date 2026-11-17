@@ -13,7 +13,7 @@
     検証用の行はコンペのデータのままなので、OOFは今までと同じ物差しで比べられる。元データの行もTEの満足率の計算に入る。
   - `--shap N`: fold0だけ学習し、検証foldからN行を抜き出してSHAP値(各列が予測をどれだけ押し上げ/押し下げたか)を
     LightGBM内蔵のTreeSHAP(pred_contrib)で計算し、data/shap_lgb_<tag>.npzに保存して終わる(図はshap_report.py)。
-実行: python src/4_models/lgb_check.py --fe zero_flags
+実行: python src/3_feature_engineering/lgb_check.py --fe zero_flags
 """
 import argparse
 import json
@@ -29,7 +29,7 @@ from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
 
 # 特徴量の定義を読み込む(フォルダ名が数字で始まりパッケージにできないため、フォルダを検索パスに足す)
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "3_feature_engineering"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import features as F  # noqa: E402
 from features import *  # noqa: E402,F401,F403  BASE・CAT・FE・ADOPTED・TE・te_fold・PREPROC・DROP・noneなど
 

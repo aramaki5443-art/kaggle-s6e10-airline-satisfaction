@@ -11,7 +11,7 @@
   上位数個のOOFでstack_check.pyを回してから選ぶ。seed42に合わせ込んだだけの設定を拾わないよう、選んだ設定は3seedで確認する。
 結果: 最良#35(max_depth 10・min_child_weight 23・L2 17・L1 0.11・gamma 0.10・max_bin 1023・subsample 0.97・colsample 0.45)が
   3seed平均+0.000244(3seedとも改善)。ただしスタックへの上乗せは+0.000008にとどまった(調整後LightGBMとの順位相関0.992)。
-使い方: python src/5_tuning/xgb_optuna.py --n-trials 50
+使い方: python src/6_ensemble/xgb_optuna.py --n-trials 50
 """
 import argparse
 import os
