@@ -8,7 +8,7 @@
     キーのまま受け取り、foldごとに計算する(te_fold・te_mapはfeature_definitions.pyと同一)。
   - Class・Type of Travel・Customer TypeはCatBoostのカテゴリ列として渡す(CatBoost独自の、答えを順番に使う集計で数値化される)。
   - 学習率0.05、木の本数は検証foldでの早期停止(100本)で決める(LightGBM・XGBoostの判定と同じ条件)。ほかは既定(depth 6等)。
-  - RUNSの各行(タグ, fold分割のseed, 元の特徴量20個だけか, 上書きするハイパラ, 距離の扱い)を順に学習し、oof_cat_<タグ>.npy・test_cat_<タグ>.npyを保存。
+  - RUNSの各行(タグ, fold分割のseed, 元の特徴量20個だけか, 上書きするハイパラ, 距離の扱い)を順に学習し、oof_cat_<タグ>.npy・test_cat_<タグ>.npyを保存。--only タグ で1行だけ学習できる。
   - 距離の扱い: None=数値のまま。"add"=数値の列は残し、同じ値の文字列コピーdist_catをカテゴリ列として足す。
     "rep"=Flight Distanceの数値列そのものをカテゴリ列に置き換える。このコンペで一番効いたのは距離を路線IDとして扱うこと
     (TEの2列)なので、CatBoost独自のカテゴリ処理(答えを行の順番に使う集計+カテゴリ同士の組み合わせ)で距離を扱えば、
@@ -21,6 +21,7 @@
 なぜ: 木のモデル同士は予測が似やすい(XGBoostは「もう1本のLightGBM」程度)。CatBoostはカテゴリ列の扱いと木の形
   (左右対称の木)が違うため、XGBoostより違う予測になる可能性がある。
 """
+import argparse
 import glob
 import json
 import os
@@ -37,6 +38,12 @@ T21 = dict(depth=7, l2_leaf_reg=24.86317046031032, border_count=254, random_stre
            bagging_temperature=0.4171977018905056, max_ctr_complexity=4)
 RUNS = [("allcat_t21_cv42", 42, False, T21, "allcat"), ("allcat_t21_cv0", 0, False, T21, "allcat"),
         ("allcat_t21_cv1", 1, False, T21, "allcat"), ("allcat_cv0", 0, False, {}, "allcat"), ("allcat_cv1", 1, False, {}, "allcat")]
+ap = argparse.ArgumentParser()
+ap.add_argument("--only", help="RUNSのうち、このタグの1行だけを学習する(例: allcat_t21_cv42 = 最終提出で使った設定)")
+args, _ = ap.parse_known_args()  # Kaggleのスクリプト実行で余分な引数が付いても止まらないように
+if args.only:
+    RUNS = [r for r in RUNS if r[0] == args.only]
+    assert RUNS, f"RUNSに{args.only}がない"
 CAT = ["Customer Type", "Type of Travel", "Class"]
 TE = {"te_distance_m3": ("Flight Distance", 3), "te_dist_class": (["Flight Distance", "Class"], 3)}
 RAW_N = 20  # 先頭20列が元の特徴量(feature_definitions.pyのBASE)

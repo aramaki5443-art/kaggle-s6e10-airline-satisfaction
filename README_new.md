@@ -420,28 +420,7 @@ src/
 
 ## 再現手順
 
-### 再現できる範囲
-
-- **このリポジトリだけでできる:** EDA、ベースライン、特徴量の作成と採否の判定、LightGBM・XGBoost・CatBoostの学習とハイパラ探索(採用した設定は`--tuned`で使える)、木3モデルのスタッキングの評価。
-- **公開ノートブック・データセットを使えばできる:** 最終提出の作り直し。RealMLP・TabPFNは公開ノートブックの再現、公開OOFは他の参加者がKaggleのデータセットとして公開した予測そのもので、どちらも自作ではないためリポジトリに含めない。これらを用意すれば、[final_stack_members.csv](src/9_public_oof_stacking/final_stack_members.csv)の226本を`make_final_submission.py`で混ぜて最終提出を作り直せる(出典は[参考にした外部情報](#参考にした外部情報))。
-- **注意:** 公開データセットがその後更新されている可能性や、計算のゆらぎ(下の確認結果)があり、OOFが小数第6位までぴったり同じになるとは限らない。
-
-### 再現できるかの確認(2026-11)
-
-このリポジトリを新しいフォルダにcloneし、下の手順だけで最終提出を作り直した。自分の4モデルも作り直した(RealMLP・TabPFN・CatBoostはKaggleのGPU、XGBoostは手元)。公開OOFは手順どおりにダウンロードした。
-
-| 作り直したもの | 作り直し | 元 | 差 |
-|---|---|---|---|
-| TabPFN(OOF AUC) | 0.960844 | 0.960844 | 0(予測値まで完全一致) |
-| RealMLP(2seed平均) | 0.961186 | 0.961192 | −0.000005 |
-| CatBoost(調整後) | 0.960985 | 0.960936 | +0.000049 |
-| XGBoost(調整後) | 0.960741 | 0.960762 | −0.000021 |
-| 最終スタック(226本、OOF AUC) | 0.9622646 | 0.9622659 | −0.0000013 |
-| 最終スタック(**Private LB**、Late Submission) | **0.96239** | **0.96239** | 0 |
-
-- 公開OOF 222本のうち221本は当時のファイルと完全に同じだった。1本(yekeno_realmlp)は公開ノートブックが後から再実行されていて、少し違った(予測の相関0.99975)。
-- 自分のモデルの小さなずれは「計算のゆらぎ」による。GPUや並列計算では、たくさんの数を足す順番が実行のたびに変わる。小数は足す順番で最後の桁が変わるため、木の分かれ目やニューラルネットの重みがわずかに変わる。XGBoostのずれは、特徴量を作るときのLightGBM(評価の期待値の予測、3の節③)が並列計算で1つのfoldだけわずかに違う値を出し、それが下流に伝わったもの。
-- ずれはどれも±0.00005以内で、上下どちらにも出ており、最終スタックでは打ち消し合ってPrivate LBは同じになった。
+最終提出(Private LB 0.96239)までの手順。RealMLP・TabPFNは公開ノートブックをもとに作ったもの、公開OOFは他の参加者が公開した予測なので、どちらもこのリポジトリには含めない。手順の中でKaggleから取得する。
 
 ### 準備
 
@@ -450,7 +429,8 @@ src/
 - uv(Pythonとライブラリの管理)とgit。
 - Kaggleのアカウント。コンペ(Predicting Airline Satisfaction)のページでルールに同意しておく(同意しないとデータをダウンロードできない)。
 - KaggleのAPIトークン。KaggleのSettingsで作り、`~/.kaggle/kaggle.json`に置くか、環境変数`KAGGLE_API_TOKEN`に設定する。
-- 空き容量: コンペのデータ約0.1GB、公開OOF約3.5GB(最終提出まで作り直す場合)。
+- KaggleのGPU(RealMLP・TabPFN・CatBoostの学習に使う)。
+- 空き容量: コンペのデータ約0.1GB、公開OOF約3.5GB。
 
 ```bash
 # uvが無ければ入れる(Windows。macOS/Linuxは https://docs.astral.sh/uv/ の手順)
@@ -465,15 +445,16 @@ uv run kaggle competitions download -c playground-series-s6e10 -p data
 uv run python -m zipfile -e data/playground-series-s6e10.zip data/
 ```
 
-時間の目安(手元はCPU 8スレッドのWindowsのPCで確認):
+時間の目安:
 
-| 処理 | 時間 |
-|---|---|
-| ベースライン・期待値の計算・LightGBM | 合計約30〜40分 |
-| XGBoost(1回) | 約10分 |
-| CatBoost(手元のCPU、1回) | 約50分(KaggleのGPUなら約17分) |
-| RealMLP・TabPFN(KaggleのGPU) | RealMLPは2本で約1〜2時間、TabPFNは5foldで約8時間 |
-| 最終スタック(`make_final_submission.py`) | 約30分 |
+| 処理 | 場所 | 時間 |
+|---|---|---|
+| ベースライン・期待値の計算・LightGBM | 手元(CPU 8スレッド) | 合計約30〜40分 |
+| XGBoost(1回) | 手元 | 約10分 |
+| CatBoost(採用した設定) | KaggleのGPU | 約17分 |
+| RealMLP(2seed) | KaggleのGPU | 約1〜2時間 |
+| TabPFN(5fold) | KaggleのGPU | 約8時間 |
+| 最終スタック | 手元 | 約30分 |
 
 ### 実行
 
@@ -499,35 +480,67 @@ uv run python src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py 
 uv run python src/5_lightgbm_hyperparameter_tuning/tune_lightgbm.py --n-trials 50
 uv run python src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --fe none --tuned --tag tuned_lr02 --predict
 
-# 6. XGBoost・CatBoost
+# 6. XGBoost
 uv run python src/6_xgboost_catboost_models/tune_xgboost.py --n-trials 50
-uv run python src/6_xgboost_catboost_models/train_xgboost.py --tuned --tag t35 --predict   # 採用した設定 → data/oof_xgb_t35_cv42.npy
-uv run python src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --fe none --export-fe   # CatBoostの入力(data/fe36_*.csv)を書き出す
-uv run python src/6_xgboost_catboost_models/train_catboost.py   # 採用した設定 → data/oof_cat_allcat_t21_cv42.npy。手元ではCPUで学習(時間がかかる)。KaggleではGPUで動く
+uv run python src/6_xgboost_catboost_models/train_xgboost.py --tuned --tag t35 --predict   # → data/oof_xgb_t35_cv42.npy
+
+# 6. CatBoost(KaggleのGPU)
+uv run python src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --fe none --export-fe   # 入力 data/fe36_train.csv・fe36_test.csv を書き出す
+#   (1) この2つのCSVと src/6_xgboost_catboost_models/train_catboost.py を、Kaggleの非公開データセットにまとめてアップロードする
+#   (2) Kaggleで新しいノートブックを作り、(1)のデータセットを入力に付け、AcceleratorをGPUにする
+#   (3) セルで  !python /kaggle/input/<(1)のデータセット名>/train_catboost.py --only allcat_t21_cv42  を実行する(採用した設定だけを学習)
+#   (4) 出力の oof_cat_allcat_t21_cv42.npy・test_cat_allcat_t21_cv42.npy を data/ に置く
+
+# 4・6. RealMLP・TabPFN(KaggleのGPU、公開ノートブックをもとに作る)
+#   RealMLP: yekenot氏の『PS|S6|E10: RealMLP · PyTabKit』をコピーし、4の節の4つの変更を加えて、seed 42と1で実行する。
+#            2本の予測を平均して data/oof_realmlp_e4_avg2.npy・data/test_realmlp_e4_avg2.npy に置く
+#   TabPFN:  hemingweb氏の『S6E10 EXP01 TabPFN35 Full Context』を参考に、6の節の設定(tabpfn==9.0.0、元の特徴量21個、
+#            n_estimators=1、random_state=0)で5fold学習し、data/oof_tabpfn_raw21_s0.npy・data/test_tabpfn_raw21_s0.npy に置く
 
 # 7. スタッキングの評価(自分の木3モデルのOOFを渡す)
 uv run python src/7_stacking_ensemble/evaluate_stacking.py LightGBM=data/oof_lgb_fe_tuned_lr02.npy XGBoost=data/oof_xgb_t35_cv42.npy CatBoost=data/oof_cat_allcat_t21_cv42.npy
 
-# 8・9. 公開OOFの点検と最終スタック(公開ノートブック・データセットを用意したとき)
-#   (1) 自分のRealMLP・TabPFNの予測を data/oof_realmlp_e4_avg2.npy・data/oof_tabpfn_raw21_s0.npy(testは test_*.npy)に置く(作り方は4・6の節)
-#   (2) 公開OOFを取得する。データセットは data/pub_oof/raw/<所有者>_<データセット名>/ に、ノートブックの出力は data/pub_oof/raw/nb_<所有者>_<ノートブック名>/ に置く
-#       (使ったものは final_stack_members.csv の source 列。cdeotte氏の124本は data/pub_oof/cdeotte124/ に直接置く)
+# 8. 公開OOFを取得し、点検する
+#   データセットは data/pub_oof/raw/<所有者>_<データセット名>/ に、ノートブックの出力は data/pub_oof/raw/nb_<所有者>_<ノートブック名>/ に置く。
+#   使ったものの一覧は final_stack_members.csv の source 列。cdeotte氏の124本だけは data/pub_oof/cdeotte124/ に直接置く
 uv run kaggle datasets download cdeotte/s6e10-124-public-oof-and-test-predictions -p data/pub_oof/cdeotte124 --unzip
-#   ほかのデータセットも同じく datasets download で取る。ノートブックの出力は kernels output で取る(例)
+#   ほかのデータセットも同じく datasets download で、ノートブックの出力は kernels output で取る(例)
 uv run kaggle kernels output yekenot/ps-s6-e10-realmlp-pytabkit -p data/pub_oof/raw/nb_yekenot_ps-s6-e10-realmlp-pytabkit
-#   注意: dariushafshar/s6e10-golem-oof-library はまとめてダウンロードすると空になることがあるので、-f でファイルごとに取る
-#   注意: 公開ノートブックは後から再実行されて中身が変わることがある(2026-11に確認した時点で、222本のうち1本(yekeno_realmlp)が当時と少し違った)
-#   (3) 形をそろえ、同じ予測の写しを外す(ファイル名が独自の3本は --pair で名前を付ける)
+#   dariushafshar/s6e10-golem-oof-library は、まとめてダウンロードすると空になることがあるので、-f でファイルごとに取る
 uv run python src/8_public_oof_inspection/inspect_public_oof.py data/pub_oof/cdeotte124
+
+# 9. 公開OOFの形をそろえ、226本を混ぜて提出ファイルを作る
+#   (1) 形をそろえ、同じ予測の写しを外す(ファイル名が独自の3本は --pair で名前を付ける)
 R=data/pub_oof/raw
 uv run python src/9_public_oof_stacking/collect_public_oof.py --ref data/pub_oof/cdeotte124 --out data/pub_oof/extra --pair   "najiam_07xgb=$R/najiama_s6e10-oof/07_XGBoost_oof.csv=$R/najiama_s6e10-oof/07_submission.csv"   "herman_cat=$R/nb_hermengardo_single-catboost-eda-ps6e10/oof_train.npy=$R/nb_hermengardo_single-catboost-eda-ps6e10/oof_test.npy"   "yekeno_realmlp=$R/nb_yekenot_ps-s6-e10-realmlp-pytabkit/oof_preds.csv=$R/nb_yekenot_ps-s6-e10-realmlp-pytabkit/submission.csv"
-#   (4) 後から足した11本: late_public_oof_sources.csv のノートブックの出力を data/pub_oof/raw_late/<所有者>_<ノートブック名>/ に置いて取り出す
+#   (2) 後から足した11本: late_public_oof_sources.csv のノートブックの出力を data/pub_oof/raw_late/<所有者>_<ノートブック名>/ に置いて取り出す
 uv run python src/9_public_oof_stacking/extract_late_public_oof.py
-#   (5) 226本を混ぜて提出ファイルを作る
+#   (3) 226本を混ぜて提出ファイルを作る
 uv run python src/9_public_oof_stacking/make_final_submission.py --tag final226 --lgb-seeds 5 --save   # → data/submission_final226.csv
 ```
 
 採用したハイパラは、`train_lightgbm.py`・`train_xgboost.py`の`TUNED`とCatBoostの`T21`に書いてある(`--tuned`で使う)。別の設定は`--params`(JSON)で渡せる。
+
+### 注意
+
+- 公開ノートブック・データセットは、後から更新されることがある。2026-11の確認では、公開OOF 222本のうち1本(yekeno_realmlp)が、ノートブックの再実行で当時と少し違った(予測の相関0.99975)。
+- GPUや並列計算では足し算の順番が実行ごとに変わるため、同じ手順でもモデルのOOFが小数第5〜6位で少しずれる(計算のゆらぎ)。
+- CatBoostは手元のCPUでも動くが、GPUとは計算の仕方が違うため結果が変わり、時間も数時間以上かかる。再現はKaggleのGPUで行う。
+
+### 再現の確認結果(2026-11)
+
+このリポジトリを新しいフォルダにcloneし、上の手順で最終提出を作り直した(自分の4モデルも作り直した)。
+
+| 作り直したもの | 作り直し | 元 | 差 |
+|---|---|---|---|
+| TabPFN(OOF AUC) | 0.960844 | 0.960844 | 0(予測値まで一致) |
+| RealMLP(2seed平均) | 0.961186 | 0.961192 | −0.000005 |
+| CatBoost | 0.960985 | 0.960936 | +0.000049 |
+| XGBoost | 0.960741 | 0.960762 | −0.000021 |
+| 最終スタック(OOF AUC) | 0.9622646 | 0.9622659 | −0.0000013 |
+| 最終スタック(**Private LB**、Late Submission) | **0.96239** | **0.96239** | 0 |
+
+モデルごとのずれは±0.00005以内で上下どちらにも出ており、最終スタックでは打ち消し合ってPrivate LBは同じになった。
 
 ## 開発について
 
