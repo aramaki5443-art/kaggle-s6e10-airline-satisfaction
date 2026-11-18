@@ -152,25 +152,29 @@ for k, (tr, va) in enumerate(skf.split(X, y)):
     print(f"fold{k}: tr {tr_aucs[-1]:.5f} va {va_aucs[-1]:.5f} iter {iters[-1]} "
           f"新列の分岐回数 {sum(imp[c] for c in X.columns[base_cols.shape[1]:])}")
 
-if BASE_OOF:
-    base = np.load(f"data/oof_lgb_fe_{BASE_OOF}.npy")
-    base_res = [json.loads(l) for l in open("data/lgb_fe_results.jsonl", encoding="utf-8")
-                if json.loads(l)["fe"] == BASE_OOF][-1]
-else:
-    base = np.load("data/oof_lgb_forward_n20.npy")
-    base_res = next(json.loads(l) for l in open("data/lgb_forward_results.jsonl", encoding="utf-8")
-                    if json.loads(l)["n"] == 20)
-rng = np.random.default_rng(0)
-diffs = []
-for _ in range(100):
-    i = rng.integers(0, len(y), len(y))
-    diffs.append(fast_auc(y[i], oof[i]) - fast_auc(y[i], base[i]))
-diffs = np.array(diffs)
 res = {"fe": tag, "params": json.loads(args.params) if args.params else {}, "adopted": ADOPTED, "base": BASE_OOF, "tr": float(np.mean(tr_aucs)), "oof": float(roc_auc_score(y, oof)),
-       "base_oof": float(roc_auc_score(y, base)), "va_folds": [float(v) for v in va_aucs],
-       "folds_improved": int(sum(a > b for a, b in zip(va_aucs, base_res["va_folds"]))),
-       "boot_sd": float(diffs.std()), "boot_p_le0": float((diffs <= 0).mean()),
-       "iters": [int(i) for i in iters], "sec": round(time.time() - t0)}
+       "va_folds": [float(v) for v in va_aucs], "iters": [int(i) for i in iters], "sec": round(time.time() - t0)}
+# 比較相手(土台)のOOFがあれば、同じ行で比べる。cloneした直後など無いときは、比べずにOOFを保存だけする
+base_path, res_path = ((f"data/oof_lgb_fe_{BASE_OOF}.npy", "data/lgb_fe_results.jsonl") if BASE_OOF
+                       else ("data/oof_lgb_forward_n20.npy", "data/lgb_forward_results.jsonl"))
+base_res = None
+if os.path.exists(base_path) and os.path.exists(res_path):
+    rows = [json.loads(l) for l in open(res_path, encoding="utf-8")]
+    hits = [r for r in rows if (r.get("fe") == BASE_OOF if BASE_OOF else r.get("n") == 20)]
+    base_res = hits[-1] if hits else None
+if base_res is None:
+    print(f"比較相手のOOF({base_path})が無いので、比べずにOOFを保存する")
+else:
+    base = np.load(base_path)
+    rng = np.random.default_rng(0)
+    diffs = []
+    for _ in range(100):
+        i = rng.integers(0, len(y), len(y))
+        diffs.append(fast_auc(y[i], oof[i]) - fast_auc(y[i], base[i]))
+    diffs = np.array(diffs)
+    res.update({"base_oof": float(roc_auc_score(y, base)),
+                "folds_improved": int(sum(a > b for a, b in zip(va_aucs, base_res["va_folds"]))),
+                "boot_sd": float(diffs.std()), "boot_p_le0": float((diffs <= 0).mean())})
 print(json.dumps(res, ensure_ascii=False))
 np.save(f"data/oof_lgb_fe_{tag}.npy", oof)
 if args.predict:
