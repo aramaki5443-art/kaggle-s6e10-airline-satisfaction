@@ -5,7 +5,7 @@
 やり方: ファイル名のキーワード(tabpfn・tabfm・realmlp・cat・lgb・xgb等)で判定する。dariushafshar氏のgl_a〜nは
   manifest.csv(公開データセットの説明)の手法名で割り当てる。sadamt_e14_seed*はRealMLPのseed違い。
   結果をdata/pub_oof/families.jsonに保存する(系統名→メンバー名の一覧)。
-使い方: python src/9_public_oof/pub_oof_families.py
+使い方: python src/9_public_oof_stacking/group_public_oof_by_model.py
 """
 import glob
 import json

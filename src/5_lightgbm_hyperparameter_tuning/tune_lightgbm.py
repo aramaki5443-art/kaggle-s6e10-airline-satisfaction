@@ -4,8 +4,8 @@
   葉の最少人数も増やす)を見逃すため、8つを同時に探す。
 ひとことで言うと: 過去の試行の結果から「次はこのあたりが良さそう」と推測しながら、値の組み合わせを50通りほど試す。
 やり方:
-  - 特徴量は採用済みの36列(features.pyのADOPTED)で固定。fold分割はseed42の5fold。学習率は0.05に固定し、
-    木の本数は検証foldでの早期停止(100本)で決める(lgb_check.pyと同じ。学習率は最後に下げる)。
+  - 特徴量は採用済みの36列(feature_definitions.pyのADOPTED)で固定。fold分割はseed42の5fold。学習率は0.05に固定し、
+    木の本数は検証foldでの早期停止(100本)で決める(train_lightgbm.pyと同じ。学習率は最後に下げる)。
   - 物差しは5foldのOOF AUC。1回目の試行は既定に近い設定(正則化0の代わりに1e-3、OOF 0.960493。完全な既定は0.960458)。
   - TEの列はfoldごとに1回だけ計算して使い回す(試行ごとに同じ値になるため)。
   - 見込みのない試行は、途中のfoldまでの平均AUCが過去の試行の中央値より低ければ打ち切る(MedianPruner)。
@@ -25,10 +25,10 @@ import pandas as pd
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold
 
-# features.pyの特徴量の定義(関数・ADOPTED・TE)を読み込む
-src = open("src/3_lgb_baseline_fe/features.py", encoding="utf-8").read()
+# feature_definitions.pyの特徴量の定義(関数・ADOPTED・TE)を読み込む
+src = open("src/3_lightgbm_baseline_and_feature_engineering/feature_definitions.py", encoding="utf-8").read()
 g = {"__name__": "fe_defs"}
-exec(compile(src, "features.py", "exec"), g)
+exec(compile(src, "feature_definitions.py", "exec"), g)
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--n-trials", type=int, default=50)
@@ -46,7 +46,7 @@ for c in g["CAT"]:
 print(f"{X.shape[1]}列", flush=True)
 folds = []
 for k, (tr, va) in enumerate(StratifiedKFold(cfg["cv"]["n_splits"], shuffle=True, random_state=cfg["cv"]["seed"]).split(X, y)):
-    Xtr, (Xva,) = g["te_fold"](X.iloc[tr], y[tr], [X.iloc[va]], seed=k)  # features.pyと同じTE
+    Xtr, (Xva,) = g["te_fold"](X.iloc[tr], y[tr], [X.iloc[va]], seed=k)  # feature_definitions.pyと同じTE
     folds.append((Xtr, y[tr], Xva, va))
 
 BASE = dict(objective="binary", learning_rate=0.05, n_estimators=10000, random_state=42, verbose=-1)

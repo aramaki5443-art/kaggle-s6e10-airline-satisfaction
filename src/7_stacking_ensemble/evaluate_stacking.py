@@ -10,7 +10,7 @@
   - rank: 順位の加重平均。重みは4つのfoldで格子探索して決め、残り1foldに当てる(重みもfoldの外で決める)。
   - 各方式の2段目のOOFでAUCを出す(foldごとの値の平均ではなく、全行をつないだAUC)。
 なぜ: 上位ノートブックは全てこの形(logitのLR)だった。客の種類などの列を2段目に足す例は悪化の報告のみのため入れない。
-使い方: python src/7_ensemble/stack_check.py 名前=OOFのパス 名前=OOFのパス ...
+使い方: python src/7_stacking_ensemble/evaluate_stacking.py 名前=OOFのパス 名前=OOFのパス ...
 """
 import argparse
 import itertools

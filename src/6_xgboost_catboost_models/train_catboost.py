@@ -3,9 +3,9 @@
 目的: RealMLP+LightGBMのアンサンブルに、3つ目の木のモデルとしてCatBoostを足す価値があるかを調べる。
 ひとことで言うと: LightGBMと同じ36列を、カテゴリ列の扱い方が違うCatBoostに学習させ、違う予測になるかを見る。
 やり方:
-  - 特徴量はfeatures.pyの採用済みの列(`python src/3_lgb_baseline_fe/lgb_check.py --fe none --export-fe`でdata/fe36_*.csvに書き出す。
+  - 特徴量はfeature_definitions.pyの採用済みの列(`python src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --fe none --export-fe`でdata/fe36_*.csvに書き出す。
     Kaggleで動かすときは、このCSVをデータセットとして読み込ませる)。TEの2列(距離・距離×Class)だけは
-    キーのまま受け取り、foldごとに計算する(te_fold・te_mapはfeatures.pyと同一)。
+    キーのまま受け取り、foldごとに計算する(te_fold・te_mapはfeature_definitions.pyと同一)。
   - Class・Type of Travel・Customer TypeはCatBoostのカテゴリ列として渡す(CatBoost独自の、答えを順番に使う集計で数値化される)。
   - 学習率0.05、木の本数は検証foldでの早期停止(100本)で決める(LightGBM・XGBoostの判定と同じ条件)。ほかは既定(depth 6等)。
   - RUNSの各行(タグ, fold分割のseed, 元の特徴量20個だけか, 上書きするハイパラ, 距離の扱い)を順に学習し、oof_cat_<タグ>.npy・test_cat_<タグ>.npyを保存。
@@ -39,7 +39,7 @@ RUNS = [("allcat_t21_cv42", 42, False, T21, "allcat"), ("allcat_t21_cv0", 0, Fal
         ("allcat_t21_cv1", 1, False, T21, "allcat"), ("allcat_cv0", 0, False, {}, "allcat"), ("allcat_cv1", 1, False, {}, "allcat")]
 CAT = ["Customer Type", "Type of Travel", "Class"]
 TE = {"te_distance_m3": ("Flight Distance", 3), "te_dist_class": (["Flight Distance", "Class"], 3)}
-RAW_N = 20  # 先頭20列が元の特徴量(features.pyのBASE)
+RAW_N = 20  # 先頭20列が元の特徴量(feature_definitions.pyのBASE)
 
 hit = glob.glob("/kaggle/input/**/fe36_train.csv", recursive=True)
 KAGGLE = bool(hit)
@@ -50,13 +50,13 @@ ids = test["id"].values
 train, test = train.drop(columns="id"), test.drop(columns="id")
 
 
-def te_map(key_fit, y_fit, key_apply, m):  # features.pyと同一
+def te_map(key_fit, y_fit, key_apply, m):  # feature_definitions.pyと同一
     p = y_fit.mean()
     g = pd.DataFrame({"k": key_fit, "y": y_fit}).groupby("k")["y"].agg(["sum", "count"])
     return pd.Series(key_apply).map((g["sum"] + m * p) / (g["count"] + m)).fillna(p).values
 
 
-def te_fold(Xtr, ytr, others, seed):  # features.pyと同一
+def te_fold(Xtr, ytr, others, seed):  # feature_definitions.pyと同一
     Xtr = Xtr.copy(); others = [o.copy() for o in others]
     for name, (_, m) in TE.items():
         if name not in Xtr:

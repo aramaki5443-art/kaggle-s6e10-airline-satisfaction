@@ -7,7 +7,7 @@
   - 行数・欠損・0〜1の範囲・単体AUC・自分のRealMLPとの順位相関・testの平均を表にしてCSVに保存する。
   - 単体AUCが自分の5モデルのスタック(0.9617)より高いものは、それ自体が答えを使ったスタックの可能性が高いので「要確認」にする。
 なぜ: 1本でも答えを見たOOFが混ざると、2段目はそれに頼り切ってOOFだけ高くなり、LBで崩れる。
-使い方: python src/8_public_oof_check/pub_oof_inspect.py data/pub_oof/cdeotte124
+使い方: python src/8_public_oof_inspection/inspect_public_oof.py data/pub_oof/cdeotte124
 """
 import glob
 import os

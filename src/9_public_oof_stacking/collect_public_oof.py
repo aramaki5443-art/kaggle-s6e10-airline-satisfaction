@@ -1,6 +1,6 @@
 """公開OOFライブラリを1つのフォルダにそろえ、すでに持っている予測と重複するものを外す。
 
-目的: 参加者ごとにファイルの形(npy/csv、float32/64、名前の付け方)が違う公開OOFを、stack_final.pyで読める形
+目的: 参加者ごとにファイルの形(npy/csv、float32/64、名前の付け方)が違う公開OOFを、make_final_submission.pyで読める形
   (oof_<名前>.npy・test_<名前>.npy、train.csv・test.csvと同じ行の順)にそろえる。
 ひとことで言うと: よそから集めた「味見の記録」を同じ書式の帳面に写し、同じ記録の写しが二重に入らないようにする。
 やり方:
@@ -12,7 +12,7 @@
     相関0.9999以上は「同じモデルの写し」とみなして外す(同じファイルが別のデータセットに再掲されていることが多い)。
   - 出力: data/pub_oof/extra/ と、採否を書いた _gather.csv。
 なぜ: 同じ予測が2本入ると、2段目のL2正則化がその系統を実質2倍の重みで扱ってしまう。
-使い方: python src/9_public_oof/pub_oof_gather.py --ref data/pub_oof/cdeotte124 --out data/pub_oof/extra
+使い方: python src/9_public_oof_stacking/collect_public_oof.py --ref data/pub_oof/cdeotte124 --out data/pub_oof/extra
 """
 import argparse
 import glob

@@ -1,10 +1,10 @@
 """最終提出のスタック: 自分のモデル4本+公開OOF 222本(計226本)を2段目で混ぜ、提出ファイルを作る。
 
-目的: 9の「公開OOFの導入」で決めた最終構成を、メンバーの一覧(final_members.csv)から作り直す。
+目的: 9の「公開OOFの導入」で決めた最終構成を、メンバーの一覧(final_stack_members.csv)から作り直す。
 ひとことで言うと: 226本の予測を「重み付きの足し算」でまとめる係(ロジスティック回帰)に、
   「この予測とこの予測が割れたら…」と条件で使い分ける係(浅いLightGBM)の意見を2割だけ足す。
 やり方:
-  - メンバーはfinal_members.csvの順に読む(folder=ownは data/oof_<name>.npy、それ以外は data/<folder>/oof_<name>.npy。
+  - メンバーはfinal_stack_members.csvの順に読む(folder=ownは data/oof_<name>.npy、それ以外は data/<folder>/oof_<name>.npy。
     testは同じ場所の test_<name>.npy)。各予測をlogit=log(p/(1-p))にして並べる。
   - 評価: 1段目とは別の5分割(--meta-seed、既定7)で、4つで学び残り1つで採点する。各foldで、ロジスティック回帰(L2、C=0.003)と
     浅いLightGBM(学習率0.03・葉15・葉の最小行数2000・列の抽出0.5・行の抽出0.8・L2=10。木の本数は学習行の1割で早期停止)を
@@ -13,7 +13,7 @@
     (testのぶれを減らすため。最終提出は5)。木の本数は評価時の平均の1.1倍(全行で学ぶぶん少し増やす)。
 なぜ: ロジスティック回帰は安定だが、メンバーどうしの条件付きの関係は表せない。浅く強く正則化した木を少し混ぜると、
   その関係を当てはめすぎずに拾える。混ぜる割合0.2と木の設定は公開ノートブックの値をそのまま使った(手元で選ぶと甘くなるため)。
-使い方: python src/9_public_oof/stack_final.py --tag final226 --lgb-seeds 5 --save
+使い方: python src/9_public_oof_stacking/make_final_submission.py --tag final226 --lgb-seeds 5 --save
 """
 import argparse
 
@@ -25,7 +25,7 @@ from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold, train_test_split
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--members", default="src/9_public_oof/final_members.csv")
+ap.add_argument("--members", default="src/9_public_oof_stacking/final_stack_members.csv")
 ap.add_argument("--C", type=float, default=0.003, help="ロジスティック回帰の正則化の強さ(小さいほど強い)")
 ap.add_argument("--meta-seed", type=int, default=7, help="2段目の評価の5分割のseed")
 ap.add_argument("--w", type=float, default=0.2, help="LightGBMを混ぜる割合")

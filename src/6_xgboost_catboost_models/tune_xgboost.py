@@ -1,17 +1,17 @@
 """XGBoostのハイパラをOptunaで複数同時に探す。
 
 目的: 既定ハイパラのXGBoost(36列、OOF 0.960527)を調整し、スタッキングへの上乗せが増えるかを確かめる。
-ひとことで言うと: LightGBMの調整(lgb_optuna.py)と同じやり方を、XGBoostの8つのつまみに当てはめる。
+ひとことで言うと: LightGBMの調整(tune_lightgbm.py)と同じやり方を、XGBoostの8つのつまみに当てはめる。
 やり方:
-  - 特徴量・TE・fold分割(seed42の5fold)・学習率0.05+早期停止100本はxgb_check.pyと同じ。TEはfoldごとに1回だけ計算して使い回す。
+  - 特徴量・TE・fold分割(seed42の5fold)・学習率0.05+早期停止100本はtrain_xgboost.pyと同じ。TEはfoldごとに1回だけ計算して使い回す。
   - 1回目の試行は既定の設定(max_depth 6・min_child_weight 1・L2 1・L1は範囲の下限1e-3・gamma 0・間引きなし・max_bin 255)。
   - 途中のfoldまでの平均AUCが過去の試行の中央値より低ければ打ち切る(MedianPruner)。結果はdata/optuna_xgb.dbに保存し、
     再実行すると続きから回る。OOFは各試行ごとにdata/optuna_xgb_oof/に保存し、上位の設定のスタックでの伸びを後で測れるようにする。
 なぜ: 単体の最良がスタックでの最良とは限らない(調整後のLightGBMはRealMLPと似て、混ぜると伸びが縮んだ)ため、
-  上位数個のOOFでstack_check.pyを回してから選ぶ。seed42に合わせ込んだだけの設定を拾わないよう、選んだ設定は3seedで確認する。
+  上位数個のOOFでevaluate_stacking.pyを回してから選ぶ。seed42に合わせ込んだだけの設定を拾わないよう、選んだ設定は3seedで確認する。
 結果: 最良#35(max_depth 10・min_child_weight 23・L2 17・L1 0.11・gamma 0.10・max_bin 1023・subsample 0.97・colsample 0.45)が
   3seed平均+0.000244(3seedとも改善)。ただしスタックへの上乗せは+0.000008にとどまった(調整後LightGBMとの順位相関0.992)。
-使い方: python src/6_models/xgb_optuna.py --n-trials 50
+使い方: python src/6_xgboost_catboost_models/tune_xgboost.py --n-trials 50
 """
 import argparse
 import os
@@ -24,10 +24,10 @@ import xgboost as xgb
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold
 
-# features.pyの特徴量の定義(関数・ADOPTED・TE)を読み込む
-src = open("src/3_lgb_baseline_fe/features.py", encoding="utf-8").read()
+# feature_definitions.pyの特徴量の定義(関数・ADOPTED・TE)を読み込む
+src = open("src/3_lightgbm_baseline_and_feature_engineering/feature_definitions.py", encoding="utf-8").read()
 g = {"__name__": "fe_defs"}
-exec(compile(src, "features.py", "exec"), g)
+exec(compile(src, "feature_definitions.py", "exec"), g)
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--n-trials", type=int, default=50)
@@ -43,7 +43,7 @@ for c in g["CAT"]:
 print(f"{X.shape[1]}列", flush=True)
 folds = []
 for k, (tr, va) in enumerate(StratifiedKFold(5, shuffle=True, random_state=42).split(X, y)):
-    Xtr, (Xva,) = g["te_fold"](X.iloc[tr], y[tr], [X.iloc[va]], seed=k)  # features.pyと同じTE
+    Xtr, (Xva,) = g["te_fold"](X.iloc[tr], y[tr], [X.iloc[va]], seed=k)  # feature_definitions.pyと同じTE
     folds.append((Xtr, y[tr], Xva, va))
 os.makedirs("data/optuna_xgb_oof", exist_ok=True)
 

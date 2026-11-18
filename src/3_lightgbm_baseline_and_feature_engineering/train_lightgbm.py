@@ -3,17 +3,17 @@
 目的: 特徴量エンジニアリングの施策を1つずつ、同じ条件でベースラインと比べる。最終のLightGBM(--predict)もこのスクリプト。
 ひとことで言うと: 「いつもの列」+「試したい列」で学習し直し、ベースラインと同じ行どうしで成績を比べる。
 やり方:
-  - 特徴量の定義(BASE・FE・ADOPTED・TE)は src/3_lgb_baseline_fe/features.py から読み込む。
-  - ベースラインは元の特徴量20個(lgb_forward_add.py --n 20と同一)+採用済みのFE(ADOPTED)。`--fe 名前`でFEに登録した列を足す。
-    比較相手のOOFは、最後に採用したFEを足したときのOOF(BASE_OOF)。FEを採用したらfeatures.pyのADOPTEDとここのBASE_OOFを更新する。
+  - 特徴量の定義(BASE・FE・ADOPTED・TE)は src/3_lightgbm_baseline_and_feature_engineering/feature_definitions.py から読み込む。
+  - ベースラインは元の特徴量20個(select_baseline_features.py --n 20と同一)+採用済みのFE(ADOPTED)。`--fe 名前`でFEに登録した列を足す。
+    比較相手のOOFは、最後に採用したFEを足したときのOOF(BASE_OOF)。FEを採用したらfeature_definitions.pyのADOPTEDとここのBASE_OOFを更新する。
   - 比較は対応のあるブートストラップ(同じ行を復元抽出して、2つのOOFのAUC差を100回計算)で、差の揺れも出す。
     feature_fractionは既定の1.0なので、列を足しても既存の木の列の選ばれ方は変わらない(公平比較)。
 なぜ: 1施策1要素の原則。足した列以外の条件をそろえれば、差はその列の効果とみなせる。
   - `--orig`: 元データ(人工データの元になった実在の満足度データ、約13万行、data/original/)を各foldの学習用の行にだけ足す。
     検証用の行はコンペのデータのままなので、OOFは今までと同じ物差しで比べられる。元データの行もTEの満足率の計算に入る。
   - `--shap N`: fold0だけ学習し、検証foldからN行を抜き出してSHAP値(各列が予測をどれだけ押し上げ/押し下げたか)を
-    LightGBM内蔵のTreeSHAP(pred_contrib)で計算し、data/shap_lgb_<tag>.npzに保存して終わる(図はshap_report.py)。
-実行: python src/3_lgb_baseline_fe/lgb_check.py --fe zero_flags
+    LightGBM内蔵のTreeSHAP(pred_contrib)で計算し、data/shap_lgb_<tag>.npzに保存して終わる(図はanalyze_shap.py)。
+実行: python src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --fe zero_flags
 """
 import argparse
 import json
@@ -30,8 +30,8 @@ from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
 
 # 特徴量の定義を読み込む(フォルダ名が数字で始まりパッケージにできないため、フォルダを検索パスに足す)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import features as F  # noqa: E402
-from features import *  # noqa: E402,F401,F403  BASE・CAT・FE・ADOPTED・TE・te_fold・PREPROC・DROP・noneなど
+import feature_definitions as F  # noqa: E402
+from feature_definitions import *  # noqa: E402,F401,F403  BASE・CAT・FE・ADOPTED・TE・te_fold・PREPROC・DROP・noneなど
 
 BASE_OOF = "night_rsd_wifi_cv42"  # 比較相手 = data/oof_lgb_fe_<これ>.npy(最後に採用したFEを--cv-seed 42で足したときのOOF。3seedで比べるときはseed0・1も同名_cv0・_cv1)
 
@@ -53,7 +53,7 @@ ap.add_argument("--predict", action="store_true", help="各foldのモデルでte
 ap.add_argument("--orig", action="store_true", help="元データの行を各foldの学習用の行に足す")
 ap.add_argument("--params", default=None, help="PARAMSの一部を一時的に置き換える(JSON、例 {\"num_leaves\": 63}。ハイパラを1つずつ調べる用。num_leavesは31のまま)")
 ap.add_argument("--shap", type=int, default=0, help="fold0だけ学習し、検証foldのこの行数でSHAP値を保存して終わる")
-ap.add_argument("--export-fe", action="store_true", help="学習せず、特徴量をdata/fe36_train.csv・fe36_test.csvに書き出して終わる(catboost_kaggle.pyの入力。TEの列はキーのまま)")
+ap.add_argument("--export-fe", action="store_true", help="学習せず、特徴量をdata/fe36_train.csv・fe36_test.csvに書き出して終わる(train_catboost.pyの入力。TEの列はキーのまま)")
 ap.add_argument("--tuned", action="store_true", help="5のハイパラ調整で採用した設定(TUNED、学習率0.02)で学習する")
 ap.add_argument("--tag", default=None, help="OOF・test予測の保存名を指定する(提出用の構成が既存の実験のファイルを上書きしないため)")
 args = ap.parse_args()
@@ -62,7 +62,7 @@ if args.adopted is not None:
 DROPS = [c for a in ADOPTED + [args.fe] for c in DROP.get(a, [])]  # 採用済みの「外す」候補も外す
 if args.base_oof is not None:
     BASE_OOF = args.base_oof
-# 5のハイパラ調整(lgb_optuna.py)で採用した設定: Optunaの試行14の値に、学習率を0.05→0.02に下げたもの
+# 5のハイパラ調整(tune_lightgbm.py)で採用した設定: Optunaの試行14の値に、学習率を0.05→0.02に下げたもの
 TUNED = {"num_leaves": 61, "min_child_samples": 5, "reg_lambda": 29.265955275846228, "reg_alpha": 0.3399216318523539,
          "min_split_gain": 0.34853053056853356, "max_bin": 511, "subsample": 0.9039977941161244, "subsample_freq": 1,
          "colsample_bytree": 0.5146287416154858, "learning_rate": 0.02}

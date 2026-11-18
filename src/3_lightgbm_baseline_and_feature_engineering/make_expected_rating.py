@@ -1,19 +1,19 @@
 """評価1項目の「期待値の列」を前もって計算して保存する(公開ノートブックの補助タスク特徴量を、1項目ずつ試すための版)。
 
-目的: 「この人の他の答え方からすると、この項目には何点を付けそうか」を列にして、lgb_check.pyで効果を測る。
+目的: 「この人の他の答え方からすると、この項目には何点を付けそうか」を列にして、train_lightgbm.pyで効果を測る。
 ひとことで言うと: Wi-Fi以外の列からWi-Fiの点数を当てるモデルを作り、その予想点を特徴量にする。
     実際の点数と予想点のずれが、その人の「この項目への特別な不満・満足」を表す。
 やり方:
   - train+test(約100万行)を5分割し、各行の予想は、その行を含まない4/5で学習したLightGBM(多クラス分類、0〜5点。2択の列は2値分類)で出す。
     満足かどうか(目的変数)は使わないので、testの行も学習に使ってよい。
   - 各点数の確率から期待値 Σ k×P(k) を計算し、data/aux_ev_<名前>.npy(trainの行→testの行の順)に保存する。
-    features.pyのev_<名前>がこのファイルを読み込む。1項目あたりLightGBMを5回学習して重いので、判定のたびには計算しない。
+    feature_definitions.pyのev_<名前>がこのファイルを読み込む。1項目あたりLightGBMを5回学習して重いので、判定のたびには計算しない。
 なぜ: 自分の点数を見て学習したモデルの予想は、実際の点数を覚えてしまい予想にならない(=分割して自分を含まないモデルで出す)。
     期待値は20列の組み合わせから作るので、木が少ない分岐では作れない情報になりうる。
     投稿者の報告では、期待値の列は効き、「その点数の起こりにくさ」の列は効かなかった。
   - カテゴリ列(Class・Type of Travel・Customer Type)は順序のある整数に置き換えて同じ計算をする
     (Class: Eco=0・Eco Plus=1・Business=2 / 2値の列はP(1)=その値である確率になる)。
-実行: python src/3_lgb_baseline_fe/make_expected_value.py --col "Online boarding" --name boarding
+実行: python src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --col "Online boarding" --name boarding
 """
 import argparse
 import time
@@ -28,7 +28,7 @@ ap.add_argument("--col", required=True)
 ap.add_argument("--name", required=True)
 args = ap.parse_args()
 
-FEATS = [  # features.pyのBASE(元の特徴量20個)とGender。予想する列自身は除く
+FEATS = [  # feature_definitions.pyのBASE(元の特徴量20個)とGender。予想する列自身は除く
     "Online boarding", "Class", "Inflight entertainment", "Inflight wifi service", "Seat comfort",
     "Flight Distance", "Type of Travel", "On-board service", "Cleanliness", "Leg room service", "Age",
     "Ease of Online booking", "Baggage handling", "Checkin service", "Food and drink", "Gate location",

@@ -1,20 +1,20 @@
-"""後から足した公開OOF 11本を、ノートブックの出力から取り出してstack_final.pyで読める形にする。
+"""後から足した公開OOF 11本を、ノートブックの出力から取り出してmake_final_submission.pyで読める形にする。
 
 目的: 最初に集めたデータセットとは別に、コンペの後半に公開されたノートブックの出力から11本をスタックに足した。
-  ファイルの形(csvの列・npzのキー・parquetの列)がノートブックごとに違うので、late_members.csvに取り出し方を書いておき、
+  ファイルの形(csvの列・npzのキー・parquetの列)がノートブックごとに違うので、late_public_oof_sources.csvに取り出し方を書いておき、
   data/<folder>/oof_<name>.npy・test_<name>.npy(train.csv・test.csvと同じ行の順)に保存する。
 ひとことで言うと: よそのノートブックの出力から、使った予測の列だけを同じ書式で書き写す。
 やり方:
   - ノートブックの出力は `kaggle kernels output <notebook> -p data/pub_oof/raw_late/<owner>_<slug>` で取得しておく。
   - npyはそのまま、npzはキー、csv・parquetは列(keyの列名。parquetの列名は数字の文字列)を読む。
-使い方: python src/9_public_oof/pub_oof_late.py
+使い方: python src/9_public_oof_stacking/extract_late_public_oof.py
 """
 import os
 
 import numpy as np
 import pandas as pd
 
-rows = pd.read_csv("src/9_public_oof/late_members.csv", dtype=str, keep_default_na=False)
+rows = pd.read_csv("src/9_public_oof_stacking/late_public_oof_sources.csv", dtype=str, keep_default_na=False)
 
 
 def read(path, key):

@@ -54,7 +54,7 @@ flowchart TD
 
 EDAで、データの大まかな特徴をつかみ、特徴量エンジニアリングのヒントを得た。各節の「なぜ見たか・発見・試したこと」はノートブックに記載している。
 
-**コード:** [src/1_eda/EDA.ipynb](src/1_eda/EDA.ipynb)
+**コード:** [src/1_exploratory_data_analysis/EDA.ipynb](src/1_exploratory_data_analysis/EDA.ipynb)
 
 ## 2. 特徴量の採用基準を設ける
 
@@ -76,17 +76,17 @@ EDAで、データの大まかな特徴をつかみ、特徴量エンジニア�
 
 ### (1) ベースライン
 
-`lgb_forward_add.py`で、元の特徴量から土台を決めた。
+`select_baseline_features.py`で、元の特徴量から土台を決めた。
 
 - 元の特徴量21個を、単変量AUCの高い順にLightGBMへ1つずつ足し、OOFの伸びを測った。
 - 20個目まではすべて改善。単独では弱い顧客区分(AUC 0.586)も+0.00113と、組み合わせで効いた。
 - 性別だけは−0.00002だったので外し、**20個を土台**にした(OOF 0.95846)。以降の特徴量はこの土台に足して判定した。
 
-**コード:** [src/3_lgb_baseline_fe/lgb_forward_add.py](src/3_lgb_baseline_fe/lgb_forward_add.py)
+**コード:** [src/3_lightgbm_baseline_and_feature_engineering/select_baseline_features.py](src/3_lightgbm_baseline_and_feature_engineering/select_baseline_features.py)
 
 ### (2) 特徴量エンジニアリング
 
-候補は1つずつ、土台と「土台+候補」をLightGBM(`lgb_check.py --fe 候補名`)で比べ、[2. 特徴量の採用基準](#2-特徴量の採用基準を設ける)の基準で採否を決めた。
+候補は1つずつ、土台と「土台+候補」をLightGBM(`train_lightgbm.py --fe 候補名`)で比べ、[2. 特徴量の採用基準](#2-特徴量の採用基準を設ける)の基準で採否を決めた。
 
 **採用した特徴量**(元の特徴量20個+作った特徴量16個=36個。OOF 0.95846→0.96046)。作り方で3つに分け、着想の出どころ(EDA・公開ノートブック・Discussion等)は「着想の根拠」の先頭に書いた。改善幅は、注記のないものは3seed平均。
 
@@ -143,10 +143,10 @@ EDAで、データの大まかな特徴をつかみ、特徴量エンジニア�
 
 | スクリプト | 役割 |
 |---|---|
-| [features.py](src/3_lgb_baseline_fe/features.py) | 特徴量の定義(候補・採用した一覧・Target Encoding)。全モデルがここから読み込む |
-| [make_expected_value.py](src/3_lgb_baseline_fe/make_expected_value.py) | 「他の特徴量から予想した評価の期待値」を前もって計算して保存する(重いので判定のたびには計算しない) |
-| [lgb_check.py](src/3_lgb_baseline_fe/lgb_check.py) | LightGBMの学習と、特徴量の採否の判定。最終のLightGBMもこれ |
-| [shap_report.py](src/3_lgb_baseline_fe/shap_report.py) | 採用した特徴量の効き方をSHAPで確かめる |
+| [feature_definitions.py](src/3_lightgbm_baseline_and_feature_engineering/feature_definitions.py) | 特徴量の定義(候補・採用した一覧・Target Encoding)。全モデルがここから読み込む |
+| [make_expected_rating.py](src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py) | 「他の特徴量から予想した評価の期待値」を前もって計算して保存する(重いので判定のたびには計算しない) |
+| [train_lightgbm.py](src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py) | LightGBMの学習と、特徴量の採否の判定。最終のLightGBMもこれ |
+| [analyze_shap.py](src/3_lightgbm_baseline_and_feature_engineering/analyze_shap.py) | 採用した特徴量の効き方をSHAPで確かめる |
 
 ## 4. 別モデル(RealMLP)を導入
 
@@ -165,7 +165,7 @@ EDAで、データの大まかな特徴をつかみ、特徴量エンジニア�
 
 ※ のちに6でXGBoost・CatBoostもハイパラ調整したが、単体の伸び(+0.000244・+0.000076)は混ぜると+0.000005・+0.000020に縮み、この方針を裏付ける結果になった。
 
-**コード:** [src/5_lgb_tuning/lgb_optuna.py](src/5_lgb_tuning/lgb_optuna.py)
+**コード:** [src/5_lightgbm_hyperparameter_tuning/tune_lightgbm.py](src/5_lightgbm_hyperparameter_tuning/tune_lightgbm.py)
 
 ## 6. XGBoost・CatBoost・TabPFN作成
 
@@ -192,8 +192,8 @@ EDAで、データの大まかな特徴をつかみ、特徴量エンジニア�
 
 | スクリプト | 役割 |
 |---|---|
-| [xgb_check.py](src/6_models/xgb_check.py)・[xgb_optuna.py](src/6_models/xgb_optuna.py) | XGBoostを同じ特徴量で学習し、混ぜる価値を診断する。Optunaでハイパラ調整 |
-| [catboost_kaggle.py](src/6_models/catboost_kaggle.py)・[catboost_optuna.py](src/6_models/catboost_optuna.py) | CatBoostを学習する(KaggleのGPU)。Optunaでハイパラ調整 |
+| [train_xgboost.py](src/6_xgboost_catboost_models/train_xgboost.py)・[tune_xgboost.py](src/6_xgboost_catboost_models/tune_xgboost.py) | XGBoostを同じ特徴量で学習し、混ぜる価値を診断する。Optunaでハイパラ調整 |
+| [train_catboost.py](src/6_xgboost_catboost_models/train_catboost.py)・[tune_catboost.py](src/6_xgboost_catboost_models/tune_catboost.py) | CatBoostを学習する(KaggleのGPU)。Optunaでハイパラ調整 |
 
 ## 7. 5モデルアンサンブル
 
@@ -242,7 +242,7 @@ flowchart LR
 
 - **その後の方針:** 上位との差は混ぜるモデルの数と種類と判断し、公開OOFを加える(→[8](#8-公開oofの点検方法を設定)・[9](#9-公開oofの導入))。
 
-**コード:** [src/7_ensemble/stack_check.py](src/7_ensemble/stack_check.py)
+**コード:** [src/7_stacking_ensemble/evaluate_stacking.py](src/7_stacking_ensemble/evaluate_stacking.py)
 
 ## 8. 公開OOFの点検方法を設定
 
@@ -326,7 +326,7 @@ flowchart LR
 
 - **最終提出:** CVで最良の226本のスタックを1本目に選んだ。LBに合わせた他の参加者の提出ファイルはOOFが無くCVで測れないので、混ぜるのは保険の2本目だけにした。
 
-**コード:** なし(公開OOFを読み込むスクリプトは含めない。評価は7の`stack_check.py`と同じ方法)
+**コード:** なし(公開OOFを読み込むスクリプトは含めない。評価は7の`evaluate_stacking.py`と同じ方法)
 
 ## 自身の工夫と参考にした外部情報
 
@@ -362,11 +362,21 @@ flowchart LR
 
 ```
 src/
-  1_eda/                   EDA.ipynb
-  3_lgb_baseline_fe/       lgb_forward_add.py、features.py、make_expected_value.py、lgb_check.py、shap_report.py
-  5_lgb_tuning/            lgb_optuna.py
-  6_models/                xgb_check.py、xgb_optuna.py、catboost_kaggle.py、catboost_optuna.py
-  7_ensemble/              stack_check.py
+├─ 1_exploratory_data_analysis/
+│    EDA.ipynb
+├─ 3_lightgbm_baseline_and_feature_engineering/
+│    select_baseline_features.py、feature_definitions.py、make_expected_rating.py、train_lightgbm.py、analyze_shap.py
+├─ 5_lightgbm_hyperparameter_tuning/
+│    tune_lightgbm.py
+├─ 6_xgboost_catboost_models/
+│    train_xgboost.py、tune_xgboost.py、train_catboost.py、tune_catboost.py
+├─ 7_stacking_ensemble/
+│    evaluate_stacking.py
+├─ 8_public_oof_inspection/
+│    inspect_public_oof.py
+└─ 9_public_oof_stacking/
+     collect_public_oof.py、group_public_oof_by_model.py、extract_late_public_oof.py、make_final_submission.py、
+     final_stack_members.csv、late_public_oof_sources.csv
 ```
 
 ## 再現手順
@@ -375,14 +385,14 @@ src/
 uv sync
 # コンペのページからtrain.csvとtest.csvをdata/に置く。スクリプトはリポジトリのルートで実行する
 # 1. 評価の期待値を前もって計算する(採用した4項目)
-python src/3_lgb_baseline_fe/make_expected_value.py --col "Online boarding" --name boarding
-python src/3_lgb_baseline_fe/make_expected_value.py --col "Leg room service" --name legroom
-python src/3_lgb_baseline_fe/make_expected_value.py --col "Checkin service" --name checkin
-python src/3_lgb_baseline_fe/make_expected_value.py --col "Departure/Arrival time convenient" --name time
+python src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --col "Online boarding" --name boarding
+python src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --col "Leg room service" --name legroom
+python src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --col "Checkin service" --name checkin
+python src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --col "Departure/Arrival time convenient" --name time
 # 2. LightGBM(採用した特徴量で学習。--helpで各オプションの説明)
-python src/3_lgb_baseline_fe/lgb_check.py --fe none
+python src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --fe none
 # 3. CatBoostの入力(data/fe36_*.csv)を書き出す
-python src/3_lgb_baseline_fe/lgb_check.py --fe none --export-fe
+python src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --fe none --export-fe
 ```
 
 ## 開発について

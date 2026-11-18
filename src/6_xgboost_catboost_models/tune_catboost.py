@@ -3,7 +3,7 @@
 目的: 全列カテゴリ化で単体0.960832になったCatBoostを調整し、スタッキングへの上乗せが増えるかを確かめる。
 ひとことで言うと: LightGBM・XGBoostの調整と同じやり方を、CatBoostの6つのつまみに当てはめる。
 やり方:
-  - データ・TE・全列カテゴリ化はcatboost_kaggle.pyと同一(入力はlgb_check.py --export-feで書き出したfe36_*.csv。
+  - データ・TE・全列カテゴリ化はtrain_catboost.pyと同一(入力はtrain_lightgbm.py --export-feで書き出したfe36_*.csv。
     Kaggleではデータセットとして読み込ませる。元の特徴量20個を文字列のカテゴリ列に、TEの2列はfoldごとに計算)。
     fold分割はseed42の5fold、学習率0.05、早期停止100本。TEはfoldごとに1回だけ計算して使い回す。
   - つまみ: depth 4〜10・l2_leaf_reg 1〜30・border_count 32/64/128/254・random_strength 0.1〜10・bagging_temperature 0〜1・
@@ -30,7 +30,7 @@ from sklearn.model_selection import StratifiedKFold
 
 N_TRIALS, LIMIT_H = 30, 10.8
 TE = {"te_distance_m3": ("Flight Distance", 3), "te_dist_class": (["Flight Distance", "Class"], 3)}
-RAW_N = 20  # 先頭20列が元の特徴量(features.pyのBASE)
+RAW_N = 20  # 先頭20列が元の特徴量(feature_definitions.pyのBASE)
 T0 = time.time()
 os.makedirs("optuna_cat", exist_ok=True)
 
@@ -40,16 +40,16 @@ X = pd.read_csv(f"{d}/fe36_train.csv")
 y = X.pop("satisfaction").values
 X = X.drop(columns="id")
 raw = list(X.columns[:RAW_N])
-X = X.assign(**{c: X[c].fillna(-1).astype(str) for c in raw})  # 全列カテゴリ化(catboost_kaggle.pyのallcatと同一)
+X = X.assign(**{c: X[c].fillna(-1).astype(str) for c in raw})  # 全列カテゴリ化(train_catboost.pyのallcatと同一)
 
 
-def te_map(key_fit, y_fit, key_apply, m):  # features.pyと同一
+def te_map(key_fit, y_fit, key_apply, m):  # feature_definitions.pyと同一
     p = y_fit.mean()
     g = pd.DataFrame({"k": key_fit, "y": y_fit}).groupby("k")["y"].agg(["sum", "count"])
     return pd.Series(key_apply).map((g["sum"] + m * p) / (g["count"] + m)).fillna(p).values
 
 
-def te_fold(Xtr, ytr, others, seed):  # features.pyと同一
+def te_fold(Xtr, ytr, others, seed):  # feature_definitions.pyと同一
     Xtr = Xtr.copy(); others = [o.copy() for o in others]
     for name, (_, m) in TE.items():
         key = Xtr[name].values; v = np.zeros(len(Xtr))

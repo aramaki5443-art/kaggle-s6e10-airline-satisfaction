@@ -1,9 +1,9 @@
 """特徴量の定義: 元の特徴量の一覧、特徴量の候補(FE)、採用した特徴量(ADOPTED)、Target Encoding(TE)。
 
 目的: 特徴量の作り方を1か所にまとめ、どのモデルのスクリプトからも同じ特徴量を使えるようにする。
-ひとことで言うと: 「材料の下ごしらえ」の手順書。学習や採点はしない(それは同じフォルダの lgb_check.py などが行う)。
+ひとことで言うと: 「材料の下ごしらえ」の手順書。学習や採点はしない(それは同じフォルダの train_lightgbm.py などが行う)。
 やり方:
-  - FE: 名前 → 関数(データを受け取り、足す列を返す)。候補は src/3_lgb_baseline_fe/lgb_check.py --fe 名前 で1つずつ判定する。
+  - FE: 名前 → 関数(データを受け取り、足す列を返す)。候補は src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --fe 名前 で1つずつ判定する。
   - ADOPTED: 判定で採用した特徴量の名前。モデルのスクリプトは元の特徴量20個(BASE)+ADOPTEDで学習する。
   - TE: 値ごとの満足率の列。答えを使うので、FEでは元の値だけを置き、学習ループの中でfoldごとに満足率へ置き換える(te_fold)。
 なぜ: LightGBM・XGBoost・ハイパラ探索で特徴量の定義が食い違わないようにするため。
@@ -14,7 +14,7 @@ import pandas as pd
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold
 
-BASE = [  # lgb_forward_add.pyのORDER[:20](Genderを除く元の特徴量20個)
+BASE = [  # select_baseline_features.pyのORDER[:20](Genderを除く元の特徴量20個)
     "Online boarding", "Class", "Inflight entertainment", "Inflight wifi service", "Seat comfort",
     "Flight Distance", "Type of Travel", "On-board service", "Cleanliness", "Leg room service", "Age",
     "Ease of Online booking", "Baggage handling", "Checkin service", "Food and drink", "Gate location",
@@ -25,7 +25,7 @@ CAT = ["Customer Type", "Type of Travel", "Class"]
 SVC = ["Inflight wifi service", "Departure/Arrival time convenient", "Ease of Online booking", "Gate location",
        "Food and drink", "Online boarding", "Seat comfort", "Inflight entertainment", "On-board service",
        "Leg room service", "Baggage handling", "Checkin service", "Cleanliness"]  # サービス評価0〜5
-PARAMS = dict(objective="binary", learning_rate=0.05, n_estimators=10000, random_state=42, verbose=-1)  # LightGBMの既定ハイパラ(元データの先生役でも使う。lgb_check.pyの--paramsで置き換わる)
+PARAMS = dict(objective="binary", learning_rate=0.05, n_estimators=10000, random_state=42, verbose=-1)  # LightGBMの既定ハイパラ(元データの先生役でも使う。train_lightgbm.pyの--paramsで置き換わる)
 
 
 def zero_flags(d):
@@ -402,7 +402,7 @@ def route_zero(name, col, kind):
 
 
 def aux_ev(name):
-    # 期待値の列(公開ノートブックのアイデア): make_expected_value.pyで前もって作った「他の列から予想したこの項目の点数」(train+testの順に保存)。
+    # 期待値の列(公開ノートブックのアイデア): make_expected_rating.pyで前もって作った「他の列から予想したこの項目の点数」(train+testの順に保存)。
     # trainとtestで行数が違うので、渡された行数で切り分ける
     def f(d):
         ev = np.load(f"data/aux_ev_{name[3:]}.npy")
