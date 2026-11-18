@@ -16,7 +16,7 @@
 
 ## コンペの進め方と段階ごとのスコア
 
-段階ごとの詳細は下の各節([1](#1-eda)〜[9](#9-公開oofの導入))に書いた。コードは`src/`の下に、段階と同じ番号のフォルダで置いている(2・4・8・9はコードなし)。
+段階ごとの詳細は下の各節([1](#1-eda)〜[9](#9-公開oofの導入))に書いた。コードは`src/`の下に、段階と同じ番号のフォルダで置いている(2・4はコードなし)。
 
 ```mermaid
 ---
@@ -151,7 +151,11 @@ EDAで、データの大まかな特徴をつかみ、特徴量エンジニア�
 ## 4. 別モデル(RealMLP)を導入
 
 - **導入理由:** 特徴量を足し続けても、OOFの伸びが鈍り(最初の2日で+0.0017、次の4日で+0.00027)、Public LBは0.96002〜0.96007で4日間横ばいになった。木とは仕組みの違うニューラルネット(RealMLP)なら、木が苦手な部分を補えると考えた。
-- **公開ノートブックの設定を2点だけ変えて使った:** ①最良のエポック(学習の回数)を、採点用のfoldではなく学習側の5%で選んだ(採点用で選ぶとOOFが甘くなるため)。②5分割の分け方をLightGBMと同じにした(同じ行どうしで比べ、混ぜられるようにするため)。
+- **公開ノートブックの設定を変えて使った:** 元にしたのはyekenot氏の公開ノートブック『PS|S6|E10: RealMLP · PyTabKit』(pytabkitのRealMLP_TD_Classifier、KaggleのGPU)。変えた点は次の4つ。
+  1. 最良のエポック(学習の回数)を、採点用のfoldではなく学習側の5%で選ぶ(`val_fraction=0.05`。採点用のfoldはfitに渡さない)。採点用で選ぶとOOFが甘くなるため。
+  2. 5分割の分け方をLightGBMと同じにする(`StratifiedKFold(5, shuffle=True, random_state=42)`)。同じ行どうしで比べ、混ぜられるようにするため。
+  3. エポック数を3→4にする(`n_epochs=4`)。
+  4. モデルのseed 42と1の2本を作り、予測を平均する(最終で使ったのはこの平均、OOF 0.961192)。
 - **結果:** 単体でもOOF 0.961056で、LightGBM(0.960418)を5foldすべてで上回った。Public LBも0.96007→0.96120と、横ばいを抜けた。
 
 **コード:** なし(RealMLPは公開ノートブックの再現のため含めない)
@@ -173,7 +177,9 @@ EDAで、データの大まかな特徴をつかみ、特徴量エンジニア�
 - **やり方:**
   - XGBoost: LightGBMと同じ36個の特徴量で学習し、Optunaでハイパラ調整(50試行)。
   - CatBoost: KaggleのGPUで学習し、Optunaでハイパラ調整(30試行)。公開ノートブックの「全列カテゴリ化+TEなし」(+0.00015の報告)を2つに分けて試し、全列カテゴリ化(+0.000187)だけを採用した(TEを外すのは±0)。
-  - TabPFN: 事前学習済みの表データ用モデル。公開ノートブックを参考にしたため、コードは含めない。
+  - TabPFN: 事前学習済みの表データ用モデル(TabPFN-3.5、`tabpfn==9.0.0`)。hemingweb氏の公開ノートブック『S6E10 EXP01 TabPFN35 Full Context』を参考にしたため、コードは含めない。
+    入力は元の特徴量21個(カテゴリ4個はカテゴリとして指定)、文脈は学習foldの全行、`n_estimators=1`・`random_state=0`。5分割はLightGBMと同じにした。
+    KaggleのGPU(T4)で1foldあたり約1.5時間かかる(メモリが足りないので、公開ノートブックと同じく文脈の計算を小分けにする)。
 - **結果:** ハイパラ調整で単体はXGBoost +0.000244・CatBoost +0.000076伸びた。5モデルの単体の強さはほぼ同じ(0.9608〜0.9612)で、予測の似かたが違った。木どうし(LightGBM・XGBoost・CatBoost)の順位相関は0.979〜0.992と高く、TabPFNは他の4モデルと0.961〜0.966と低い。
 
 **表: 単体OOFと、モデルどうしの予測の順位相関(1に近いほど似た予測)**
@@ -248,13 +254,14 @@ flowchart LR
 
 - **公開OOFとは:** 他の参加者が公開した、OOFとtestの予測のセット。**予測の値だけ**なので、中のモデルの数や分け方は公開した人しだい。それでも、OOFが「その行を学習していないモデルの予測」になっていれば、2段目からは**列が1本増えるだけ**で、7の仕組みにそのまま入れられる。
 - **点検理由:** 作り方が見えないので、正しく作られていないもの(OOFが甘いもの等)を混ぜると、手元のOOFだけが良く見えてPrivateで崩れるおそれがある。そこで、混ぜる前に点検する方法を決めた。
-- **やり方:** 次の2つを確かめる。
+- **やり方:** 次の3つを確かめる。
   - 行数・欠損・範囲外の値: trainとtestの各行に、0〜1の予測が1つずつそろっているか。
   - 予測値の平均が、OOFもtestも約0.44か: 満足の割合は約0.44なので、確率として作られていれば平均もそれに近い。平均がちょうど0.5なら、順位に直して混ぜたもので、中身が他の公開OOFと重なるおそれがある。
+  - 単体のAUCが、自分の5モデルのスタック(0.9617)より高すぎないか: それ自体が答えを使って混ぜた結果の可能性がある。
 - **結果:** 最初の124本のうち1本を除外した(平均がちょうど0.5で、単体のAUCが自分のスタックより高い)。順位に直して他のモデルを混ぜたものとみた。
 - **その後の方針:** 点検に合格した公開OOFだけを、7のスタックに加える(→[9](#9-公開oofの導入))。
 
-**コード:** なし(公開OOFは他の参加者の成果物で、それを読み込むスクリプトも含めない)
+**コード:** [src/8_public_oof_check/pub_oof_inspect.py](src/8_public_oof_check/pub_oof_inspect.py)(公開OOFのファイル自体は他の参加者の成果物なので含めない)
 
 ## 9. 公開OOFの導入
 
@@ -326,7 +333,15 @@ flowchart LR
 
 - **最終提出:** CVで最良の226本のスタックを1本目に選んだ。LBに合わせた他の参加者の提出ファイルはOOFが無くCVで測れないので、混ぜるのは保険の2本目だけにした。
 
-**コード:** なし(公開OOFを読み込むスクリプトは含めない。評価は7の`stack_check.py`と同じ方法)
+**コード:** `src/9_public_oof/`(公開OOFのファイル自体は含めない)
+
+| スクリプト | 役割 |
+|---|---|
+| [pub_oof_gather.py](src/9_public_oof/pub_oof_gather.py) | 形式の違う公開OOFを同じ形にそろえ、同じ予測の写し(相関0.9999以上)を外す |
+| [pub_oof_families.py](src/9_public_oof/pub_oof_families.py) | メンバーを系統(TabPFN・ニューラルネット・CatBoost・LightGBMなど)に分ける |
+| [stack_final.py](src/9_public_oof/stack_final.py) | 最終の226本を2段目で混ぜ(ロジスティック回帰8割+浅いLightGBM2割)、提出ファイルを作る |
+| [final_members.csv](src/9_public_oof/final_members.csv) | 最終の226本の一覧(名前・系統・置き場所・出典) |
+| [pub_oof_late.py](src/9_public_oof/pub_oof_late.py)・[late_members.csv](src/9_public_oof/late_members.csv) | 後から足した11本を、ノートブックの出力から取り出す |
 
 ## 自身の工夫と参考にした外部情報
 
@@ -367,6 +382,8 @@ src/
   5_lgb_tuning/            lgb_optuna.py
   6_models/                xgb_check.py、xgb_optuna.py、catboost_kaggle.py、catboost_optuna.py
   7_ensemble/              stack_check.py
+  8_public_oof_check/      pub_oof_inspect.py
+  9_public_oof/            pub_oof_gather.py、pub_oof_families.py、pub_oof_late.py、stack_final.py、final_members.csv、late_members.csv
 ```
 
 ## 使用技術と環境
@@ -385,10 +402,18 @@ src/
 
 ### 再現できる範囲
 
-- **できる:** EDA、ベースライン(元の特徴量の選択)、特徴量の作成と採否の判定、LightGBM・XGBoost・CatBoostの学習とハイパラ探索、自分の木3モデルのスタッキング。
-- **できない:** RealMLP・TabPFNは公開ノートブックを再現したもの、公開OOFは他の参加者がKaggleのデータセットとして公開した予測そのもので、どちらも自作ではないため、このリポジトリには入れていない。そのため、最終提出(Private LB 0.96239)を再現するには、それらの公開ノートブックとデータセット(出典は[参考にした外部情報](#参考にした外部情報))を使う必要がある。
+- **このリポジトリだけでできる:** EDA、ベースライン、特徴量の作成と採否の判定、LightGBM・XGBoost・CatBoostの学習とハイパラ探索(採用した設定は`--tuned`で使える)、木3モデルのスタッキングの評価。
+- **公開ノートブック・データセットを使えばできる:** 最終提出の作り直し。RealMLP・TabPFNは公開ノートブックの再現、公開OOFは他の参加者がKaggleのデータセットとして公開した予測そのもので、どちらも自作ではないためリポジトリに含めない。これらを用意すれば、[final_members.csv](src/9_public_oof/final_members.csv)の226本を`stack_final.py`で混ぜて最終提出を作り直せる(出典は[参考にした外部情報](#参考にした外部情報))。
+- **注意:** 公開データセットがその後更新されている可能性や、GPUの計算のゆらぎ(CatBoostで同じ設定でもOOFが0.00004程度ずれた)があり、Private LB 0.96239がぴったり同じになるとは限らない。
 
 ### 準備
+
+必要なもの:
+
+- uv(Pythonとライブラリの管理)とgit。
+- Kaggleのアカウント。コンペ(Predicting Airline Satisfaction)のページでルールに同意しておく(同意しないとデータをダウンロードできない)。
+- KaggleのAPIトークン。KaggleのSettingsで作り、`~/.kaggle/kaggle.json`に置くか、環境変数`KAGGLE_API_TOKEN`に設定する。
+- 空き容量: コンペのデータ約0.1GB、公開OOF約3.5GB(最終提出まで作り直す場合)。
 
 ```bash
 # uvが無ければ入れる(Windows。macOS/Linuxは https://docs.astral.sh/uv/ の手順)
@@ -398,8 +423,20 @@ git clone <このリポジトリのURL>
 cd kaggle-s6e10-airline-satisfaction
 uv sync   # Python 3.13と、pyproject.tomlのライブラリを入れる
 
-# Kaggleのコンペのページ(Predicting Airline Satisfaction)からtrain.csvとtest.csvをダウンロードし、data/に置く
+# コンペのデータ(train.csv・test.csv)をdata/に取得する
+uv run kaggle competitions download -c playground-series-s6e10 -p data
+uv run python -m zipfile -e data/playground-series-s6e10.zip data/
 ```
+
+時間の目安(手元はCPU 8スレッドのWindowsのPCで確認):
+
+| 処理 | 時間 |
+|---|---|
+| ベースライン・期待値の計算・LightGBM | 合計約30〜40分 |
+| XGBoost(1回) | 約10分 |
+| CatBoost(手元のCPU、1回) | 約50分(KaggleのGPUなら約17分) |
+| RealMLP・TabPFN(KaggleのGPU) | RealMLPは2本で約1〜2時間、TabPFNは5foldで約8時間 |
+| 最終スタック(`stack_final.py`) | 約30分 |
 
 ### 実行
 
@@ -421,20 +458,39 @@ uv run python src/3_lgb_baseline_fe/make_expected_value.py --col "Departure/Arri
 #    採用した特徴量(36個)でLightGBMを学習し、testも予測する。候補を1つ試すときは --fe 候補名
 uv run python src/3_lgb_baseline_fe/lgb_check.py --fe none --predict
 
-# 5. LightGBMのハイパラ探索(Optuna、結果はdata/optuna_lgb.dbに保存)
+# 5. LightGBMのハイパラ探索(Optuna、結果はdata/optuna_lgb.dbに保存)と、採用した設定での学習
 uv run python src/5_lgb_tuning/lgb_optuna.py --n-trials 50
+uv run python src/3_lgb_baseline_fe/lgb_check.py --fe none --tuned --tag tuned_lr02 --predict
 
 # 6. XGBoost・CatBoost
-uv run python src/6_models/xgb_check.py --predict
 uv run python src/6_models/xgb_optuna.py --n-trials 50
+uv run python src/6_models/xgb_check.py --tuned --tag t35 --predict   # 採用した設定 → data/oof_xgb_t35_cv42.npy
 uv run python src/3_lgb_baseline_fe/lgb_check.py --fe none --export-fe   # CatBoostの入力(data/fe36_*.csv)を書き出す
-uv run python src/6_models/catboost_kaggle.py   # 手元ではCPUで学習(時間がかかる)。KaggleではGPUで動く
+uv run python src/6_models/catboost_kaggle.py   # 採用した設定 → data/oof_cat_allcat_t21_cv42.npy。手元ではCPUで学習(時間がかかる)。KaggleではGPUで動く
 
 # 7. スタッキングの評価(自分の木3モデルのOOFを渡す)
-uv run python src/7_ensemble/stack_check.py LightGBM=data/oof_lgb_fe_none.npy XGBoost=data/oof_xgb_base.npy CatBoost=data/oof_cat_allcat_t21_cv42.npy
+uv run python src/7_ensemble/stack_check.py LightGBM=data/oof_lgb_fe_tuned_lr02.npy XGBoost=data/oof_xgb_t35_cv42.npy CatBoost=data/oof_cat_allcat_t21_cv42.npy
+
+# 8・9. 公開OOFの点検と最終スタック(公開ノートブック・データセットを用意したとき)
+#   (1) 自分のRealMLP・TabPFNの予測を data/oof_realmlp_e4_avg2.npy・data/oof_tabpfn_raw21_s0.npy(testは test_*.npy)に置く(作り方は4・6の節)
+#   (2) 公開OOFを取得する。データセットは data/pub_oof/raw/<所有者>_<データセット名>/ に、ノートブックの出力は data/pub_oof/raw/nb_<所有者>_<ノートブック名>/ に置く
+#       (使ったものは final_members.csv の source 列。cdeotte氏の124本は data/pub_oof/cdeotte124/ に直接置く)
+uv run kaggle datasets download cdeotte/s6e10-124-public-oof-and-test-predictions -p data/pub_oof/cdeotte124 --unzip
+#   ほかのデータセットも同じく datasets download で取る。ノートブックの出力は kernels output で取る(例)
+uv run kaggle kernels output yekenot/ps-s6-e10-realmlp-pytabkit -p data/pub_oof/raw/nb_yekenot_ps-s6-e10-realmlp-pytabkit
+#   注意: dariushafshar/s6e10-golem-oof-library はまとめてダウンロードすると空になることがあるので、-f でファイルごとに取る
+#   注意: 公開ノートブックは後から再実行されて中身が変わることがある(2026-11に確認した時点で、222本のうち1本(yekeno_realmlp)が当時と少し違った)
+#   (3) 形をそろえ、同じ予測の写しを外す(ファイル名が独自の3本は --pair で名前を付ける)
+uv run python src/8_public_oof_check/pub_oof_inspect.py data/pub_oof/cdeotte124
+R=data/pub_oof/raw
+uv run python src/9_public_oof/pub_oof_gather.py --ref data/pub_oof/cdeotte124 --out data/pub_oof/extra --pair   "najiam_07xgb=$R/najiama_s6e10-oof/07_XGBoost_oof.csv=$R/najiama_s6e10-oof/07_submission.csv"   "herman_cat=$R/nb_hermengardo_single-catboost-eda-ps6e10/oof_train.npy=$R/nb_hermengardo_single-catboost-eda-ps6e10/oof_test.npy"   "yekeno_realmlp=$R/nb_yekenot_ps-s6-e10-realmlp-pytabkit/oof_preds.csv=$R/nb_yekenot_ps-s6-e10-realmlp-pytabkit/submission.csv"
+#   (4) 後から足した11本: late_members.csv のノートブックの出力を data/pub_oof/raw_late/<所有者>_<ノートブック名>/ に置いて取り出す
+uv run python src/9_public_oof/pub_oof_late.py
+#   (5) 226本を混ぜて提出ファイルを作る
+uv run python src/9_public_oof/stack_final.py --tag final226 --lgb-seeds 5 --save   # → data/submission_final226.csv
 ```
 
-ハイパラ探索で見つけた設定は、`lgb_check.py`・`xgb_check.py`に`--params`(JSON)で渡す。
+採用したハイパラは、`lgb_check.py`・`xgb_check.py`の`TUNED`とCatBoostの`T21`に書いてある(`--tuned`で使う)。別の設定は`--params`(JSON)で渡せる。
 
 ## 開発について
 

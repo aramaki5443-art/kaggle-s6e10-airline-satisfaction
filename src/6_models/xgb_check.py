@@ -31,6 +31,7 @@ ap.add_argument("--tag", default="base")
 ap.add_argument("--params", default=None, help="既定の一部を置き換える(JSON)")
 ap.add_argument("--adopted", default=None, help="使うFEをカンマ区切りで置き換える(空文字なら元の特徴量20個だけ。特徴量の違いで多様性が増えるかの確認用)")
 ap.add_argument("--predict", action="store_true", help="testも予測して保存する")
+ap.add_argument("--tuned", action="store_true", help="6のハイパラ調整(xgb_optuna.py)で採用した設定(TUNED)で学習する")
 ap.add_argument("--fe", default=None, help="ADOPTEDに1つ足すFE(features.pyのFEの名前。XGBoost向けの特徴量選び)")
 args = ap.parse_args()
 if args.adopted is not None:
@@ -56,6 +57,11 @@ if args.predict:
 
 P = dict(learning_rate=0.05, n_estimators=10000, early_stopping_rounds=100, tree_method="hist", enable_categorical=True,
          eval_metric="auc", random_state=42, n_jobs=-1)
+# 6のハイパラ調整(xgb_optuna.py)で採用した設定: Optunaの試行35の値
+TUNED = {"max_depth": 10, "min_child_weight": 23.27750908295225, "reg_lambda": 17.154422085714742, "reg_alpha": 0.10595012492749806,
+         "gamma": 0.09813717336201243, "max_bin": 1023, "subsample": 0.9653056625598389, "colsample_bytree": 0.4517043587579834}
+if args.tuned:
+    P.update(TUNED)
 if args.params:
     P.update(json.loads(args.params))
 oof = np.zeros(len(y)); tr_aucs, va_aucs, iters = [], [], []; t0 = time.time()

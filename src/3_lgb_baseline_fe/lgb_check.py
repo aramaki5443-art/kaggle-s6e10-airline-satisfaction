@@ -54,6 +54,7 @@ ap.add_argument("--orig", action="store_true", help="元データの行を各fol
 ap.add_argument("--params", default=None, help="PARAMSの一部を一時的に置き換える(JSON、例 {\"num_leaves\": 63}。ハイパラを1つずつ調べる用。num_leavesは31のまま)")
 ap.add_argument("--shap", type=int, default=0, help="fold0だけ学習し、検証foldのこの行数でSHAP値を保存して終わる")
 ap.add_argument("--export-fe", action="store_true", help="学習せず、特徴量をdata/fe36_train.csv・fe36_test.csvに書き出して終わる(catboost_kaggle.pyの入力。TEの列はキーのまま)")
+ap.add_argument("--tuned", action="store_true", help="5のハイパラ調整で採用した設定(TUNED、学習率0.02)で学習する")
 ap.add_argument("--tag", default=None, help="OOF・test予測の保存名を指定する(提出用の構成が既存の実験のファイルを上書きしないため)")
 args = ap.parse_args()
 if args.adopted is not None:
@@ -61,6 +62,13 @@ if args.adopted is not None:
 DROPS = [c for a in ADOPTED + [args.fe] for c in DROP.get(a, [])]  # 採用済みの「外す」候補も外す
 if args.base_oof is not None:
     BASE_OOF = args.base_oof
+# 5のハイパラ調整(lgb_optuna.py)で採用した設定: Optunaの試行14の値に、学習率を0.05→0.02に下げたもの
+TUNED = {"num_leaves": 61, "min_child_samples": 5, "reg_lambda": 29.265955275846228, "reg_alpha": 0.3399216318523539,
+         "min_split_gain": 0.34853053056853356, "max_bin": 511, "subsample": 0.9039977941161244, "subsample_freq": 1,
+         "colsample_bytree": 0.5146287416154858, "learning_rate": 0.02}
+if args.tuned:
+    PARAMS = {**PARAMS, **TUNED}
+    F.PARAMS = PARAMS
 if args.params:
     PARAMS = {**PARAMS, **json.loads(args.params)}
     F.PARAMS = PARAMS

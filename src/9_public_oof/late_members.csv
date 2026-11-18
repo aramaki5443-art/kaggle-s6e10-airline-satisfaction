@@ -1,0 +1,12 @@
+name,folder,notebook,oof_file,oof_key,test_file,test_key
+km_ladder_lgb,pub_oof/new1026,koumeimaki/s6e10-feature-ladder-what-helps-lightgbm,oof_feature_ladder.csv,oof_lgb,test_feature_ladder.csv,pred_lgb
+km_ladder_xgb,pub_oof/new1026,koumeimaki/s6e10-feature-ladder-what-helps-lightgbm,oof_feature_ladder.csv,oof_xgb,test_feature_ladder.csv,pred_xgb
+th_xgb,pub_oof/new1026,thethiago28/notebook4ec6a89dc3,preds_lgbm_xgb_cat.npz,oof_xgb,preds_lgbm_xgb_cat.npz,test_xgb
+th_cat,pub_oof/new1026,thethiago28/notebook4ec6a89dc3,preds_lgbm_xgb_cat.npz,oof_cat,preds_lgbm_xgb_cat.npz,test_cat
+mj_xgb_k15,pub_oof/new1026,mojjeed/s6e10-cv-96180-stacking,own_members/oof_xgb_k15.npy,,own_members/test_xgb_k15.npy,
+mj_cat_k15,pub_oof/new1026,mojjeed/s6e10-cv-96180-stacking,own_members/oof_cat_k15.npy,,own_members/test_cat_k15.npy,
+msc_t_xgb,pub_oof/new1027,mathsonchain/s6e10-pseudo-labels,oof_t_xgb.npy,,test_t_xgb.npy,
+msc_t_cat,pub_oof/new1027,mathsonchain/s6e10-pseudo-labels,oof_t_cat.npy,,test_t_cat.npy,
+mh_realmlp_cpu,pub_oof/new1028,masumhuq/s6e10-realmlp-cpu-original,oof_realmlp.npy,,test_realmlp.npy,
+fa_cat,pub_oof/new1030,francescoalbanesephd/s6e10-gbdt-v1-3,kaggle-archive/predictions/oof_catboost.parquet,1,kaggle-archive/predictions/test_catboost.parquet,1
+fa_xgb,pub_oof/new1030,francescoalbanesephd/s6e10-gbdt-v1-3,kaggle-archive/predictions/oof_xgboost.parquet,1,kaggle-archive/predictions/test_xgboost.parquet,1
