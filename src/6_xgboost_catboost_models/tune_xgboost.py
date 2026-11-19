@@ -29,9 +29,9 @@ from sklearn.model_selection import StratifiedKFold
 sys.path.insert(0, "src/2_lightgbm_baseline_and_feature_engineering")
 import feature_definitions as features  # noqa: E402
 
-ap = argparse.ArgumentParser()
-ap.add_argument("--n-trials", type=int, default=50)
-ap.add_argument("--study", default="xgb_c36_v1")
+ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+ap.add_argument("--n-trials", type=int, default=50, help="試す設定の数(途中で止めても、同じ--studyなら続きから)")
+ap.add_argument("--study", default="xgb_c36_v1", help="探索の名前。結果はdata/optuna_xgb.dbにこの名前で保存する")
 args = ap.parse_args()
 
 # データの置き場所・列名(リポジトリのルートで実行する前提)

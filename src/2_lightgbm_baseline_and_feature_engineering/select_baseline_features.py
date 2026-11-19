@@ -32,7 +32,7 @@ FEATURE_ORDER = [  # EDA 6節の「値ごとの満足率」単変量AUCの高い
 CATEGORICAL_COLUMNS = ["Gender", "Customer Type", "Type of Travel", "Class"]
 LGB_PARAMS = dict(objective="binary", learning_rate=0.05, n_estimators=10000, random_state=42, verbose=-1)
 
-ap = argparse.ArgumentParser()
+ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
 ap.add_argument("--n-features", type=int, required=True, help="FEATURE_ORDERの上位何個を使うか")
 ap.add_argument("--predict", action="store_true", help="testを予測してdata/submission.csvを作る")
 args = ap.parse_args()

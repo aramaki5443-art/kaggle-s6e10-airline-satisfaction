@@ -38,7 +38,7 @@ TUNED_PARAMS = dict(depth=7, l2_leaf_reg=24.86317046031032, border_count=254, ra
                     bagging_temperature=0.4171977018905056, max_ctr_complexity=4)
 RUNS = [("allcat_t21_cv42", 42, False, TUNED_PARAMS, "allcat"), ("allcat_t21_cv0", 0, False, TUNED_PARAMS, "allcat"),
         ("allcat_t21_cv1", 1, False, TUNED_PARAMS, "allcat"), ("allcat_cv0", 0, False, {}, "allcat"), ("allcat_cv1", 1, False, {}, "allcat")]
-ap = argparse.ArgumentParser()
+ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
 ap.add_argument("--run", help="RUNSのうち、このタグの1行だけを学習する(例: allcat_t21_cv42 = 最終提出で使った設定)")
 args, _ = ap.parse_known_args()  # Kaggleのスクリプト実行で余分な引数が付いても止まらないように
 if args.run:

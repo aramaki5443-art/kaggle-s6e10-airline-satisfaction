@@ -46,7 +46,7 @@ def rank_auc(labels, scores):
     return (ranks[labels == 1].sum() - n_pos * (n_pos + 1) / 2) / (n_pos * (len(labels) - n_pos))
 
 
-ap = argparse.ArgumentParser()
+ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
 ap.add_argument("--feature", required=True, choices=CANDIDATE_BUILDERS, help="足す特徴量の候補の名前(何も足さないときは none)")
 ap.add_argument("--adopted", default=None, help="ADOPTED_FEATURESを一時的に置き換える(カンマ区切り。切り分け実験用)")
 ap.add_argument("--comparison-oof", default=None, help="COMPARISON_OOFを一時的に置き換える")

@@ -1,4 +1,4 @@
-"""CatBoost(全列カテゴリ化)のハイパラを、KaggleのGPUでOptunaにより探す。
+"""CatBoost(全特徴量をカテゴリ扱い)のハイパラを、KaggleのGPUでOptunaにより探す。
 
 目的: 全列カテゴリ化で単体0.960832になったCatBoostを調整し、スタッキングへの上乗せが増えるかを確かめる。
 ひとことで言うと: LightGBM・XGBoostの調整と同じやり方を、CatBoostの6つのつまみに当てはめる。

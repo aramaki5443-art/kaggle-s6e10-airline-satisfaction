@@ -23,12 +23,12 @@ import numpy as np
 import pandas as pd
 
 sys.stdout.reconfigure(encoding="utf-8")
-ap = argparse.ArgumentParser()
-ap.add_argument("--raw-dir", default="data/pub_oof/raw")
-ap.add_argument("--reference-dir", nargs="*", default=[])
-ap.add_argument("--out-dir", default="data/pub_oof/extra")
+ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+ap.add_argument("--raw-dir", default="data/pub_oof/raw", help="取得した公開OOFのフォルダ(この下のフォルダを1つずつ読む)")
+ap.add_argument("--reference-dir", nargs="*", default=[], help="すでに使っているOOFのフォルダ。これらと同じ予測の写しは外す")
+ap.add_argument("--out-dir", default="data/pub_oof/extra", help="形をそろえたOOFの保存先")
 ap.add_argument("--named-pair", nargs="*", default=[], help="名前=OOFのファイル=testのファイル(npyまたはcsv、csvは最後の列を予測値とみなす)")
-ap.add_argument("--duplicate-corr", type=float, default=0.9999)
+ap.add_argument("--duplicate-corr", type=float, default=0.9999, help="既存とのlogitの相関がこれ以上なら、同じ予測の写しとして外す")
 args = ap.parse_args()
 
 n_train = len(pd.read_csv("data/train.csv", usecols=["id"]))

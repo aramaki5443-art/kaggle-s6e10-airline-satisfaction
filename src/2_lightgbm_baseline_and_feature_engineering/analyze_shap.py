@@ -1,4 +1,4 @@
-"""自分のLightGBMのSHAP値から、どの列がどう効いているかを表と図にする。
+"""自分のLightGBMのSHAP値から、どの特徴量がどう効いているかを表と図にする。
 
 目的: 特徴量重要度(gain・分岐回数)とSHAPで、各列の寄与の大きさ・向き・列どうしの組み合わせ効果を確認する。
 ひとことで言うと: 1人ずつの予測を「基準値+列ごとの押し上げ/押し下げ」に分解し、それを全員分集めて眺める。
@@ -26,8 +26,8 @@ import pandas as pd
 import shap
 from scipy.stats import spearmanr
 
-ap = argparse.ArgumentParser()
-ap.add_argument("--save-name", default="shap_tuned")
+ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+ap.add_argument("--save-name", default="shap_tuned", help="train_lightgbm.pyでSHAP用に保存した名前(data/shap_lgb_<名前>.npz等を読む)。図はdata/shap/<名前>/に保存")
 ap.add_argument("--interaction-rows", type=int, default=3000, help="交互作用を計算する行数(0なら計算しない)")
 args = ap.parse_args()
 plt.rcParams["font.family"] = ["Yu Gothic", "Meiryo", "sans-serif"]  # 日本語の軸ラベル用(Windows)

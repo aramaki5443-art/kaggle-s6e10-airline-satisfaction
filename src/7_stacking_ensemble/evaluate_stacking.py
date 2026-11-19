@@ -22,9 +22,9 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold
 
-ap = argparse.ArgumentParser()
-ap.add_argument("members", nargs="+")
-ap.add_argument("--meta-seed", type=int, default=7)
+ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+ap.add_argument("members", nargs="+", help="混ぜるモデルを「名前=OOFのファイル」の形で並べる(例: XGBoost=data/oof_xgb_t35_cv42.npy)")
+ap.add_argument("--meta-seed", type=int, default=7, help="2段目の評価の5分割のseed")
 ap.add_argument("--weight-step", type=float, default=0.05, help="順位ブレンドの重みの格子の幅")
 args = ap.parse_args()
 

@@ -1,4 +1,4 @@
-"""評価1項目の「期待値の列」を前もって計算して保存する(公開ノートブックの補助タスク特徴量を、1項目ずつ試すための版)。
+"""サービス評価1項目の期待値(特徴量)を前もって計算して保存する(公開ノートブックの補助タスク特徴量を、1項目ずつ試すための版)。
 
 目的: 「この人の他の答え方からすると、この項目には何点を付けそうか」を列にして、train_lightgbm.pyで効果を測る。
 ひとことで言うと: Wi-Fi以外の列からWi-Fiの点数を当てるモデルを作り、その予想点を特徴量にする。
@@ -24,9 +24,9 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import KFold
 
-ap = argparse.ArgumentParser()
-ap.add_argument("--rating-col", required=True)
-ap.add_argument("--save-name", required=True)
+ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+ap.add_argument("--rating-col", required=True, help="期待値を作るサービス評価の列名(例: Online boarding)")
+ap.add_argument("--save-name", required=True, help="保存名。data/aux_ev_<名前>.npyに保存する(例: boarding)")
 args = ap.parse_args()
 
 INPUT_FEATURES = [  # feature_definitions.pyのBASE_FEATURES(元の特徴量20個)とGender。予想する列自身は除く

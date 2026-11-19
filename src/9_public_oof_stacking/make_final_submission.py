@@ -23,13 +23,13 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold, train_test_split
 
-ap = argparse.ArgumentParser()
-ap.add_argument("--members", default="src/9_public_oof_stacking/final_stack_members.csv")
+ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+ap.add_argument("--members", default="src/9_public_oof_stacking/final_stack_members.csv", help="混ぜるメンバーの一覧(CSV)")
 ap.add_argument("--C", type=float, default=0.003, help="ロジスティック回帰の正則化の強さ(小さいほど強い)")
 ap.add_argument("--meta-seed", type=int, default=7, help="2段目の評価の5分割のseed")
 ap.add_argument("--lgb-weight", type=float, default=0.2, help="LightGBMを混ぜる割合")
 ap.add_argument("--lgb-seeds", type=int, default=1, help="--saveのとき、全行で学ぶLightGBMをこの数のseedで平均する")
-ap.add_argument("--save-name", default="final226")
+ap.add_argument("--save-name", default="final226", help="--saveのときの保存名。data/submission_<名前>.csvに保存する")
 ap.add_argument("--save", action="store_true", help="全行で学び直してtestに当て、提出ファイルを作る")
 args = ap.parse_args()
 

@@ -28,9 +28,9 @@ import rejected_feature_candidates as rejected  # noqa: E402
 
 CANDIDATE_BUILDERS = {**features.FEATURE_BUILDERS, **rejected.REJECTED_FEATURE_BUILDERS}  # --featureで試せる候補
 
-ap = argparse.ArgumentParser()
-ap.add_argument("--cv-seed", type=int, default=42)
-ap.add_argument("--save-name", default="base")
+ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+ap.add_argument("--cv-seed", type=int, default=42, help="5fold分割のseed(採否の判定で42・0・1を使う)")
+ap.add_argument("--save-name", default="base", help="保存名。data/oof_xgb_<名前>_cv<seed>.npyに保存する")
 ap.add_argument("--params", default=None, help="既定の一部を置き換える(JSON)")
 ap.add_argument("--adopted", default=None, help="使う特徴量をカンマ区切りで置き換える(空文字なら元の特徴量20個だけ。特徴量の違いで多様性が増えるかの確認用)")
 ap.add_argument("--predict", action="store_true", help="testも予測して保存する")
