@@ -13,7 +13,7 @@
     投稿者の報告では、期待値の列は効き、「その点数の起こりにくさ」の列は効かなかった。
   - カテゴリ列(Class・Type of Travel・Customer Type)は順序のある整数に置き換えて同じ計算をする
     (Class: Eco=0・Eco Plus=1・Business=2 / 2値の列はP(1)=その値である確率になる)。
-実行: python src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --col "Online boarding" --name boarding
+実行: python src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --rating-col "Online boarding" --save-name boarding
 """
 import argparse
 import time
@@ -24,8 +24,8 @@ import pandas as pd
 from sklearn.model_selection import KFold
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--col", required=True)
-ap.add_argument("--name", required=True)
+ap.add_argument("--rating-col", required=True)
+ap.add_argument("--save-name", required=True)
 args = ap.parse_args()
 
 INPUT_FEATURES = [  # feature_definitions.pyのBASE_FEATURES(元の特徴量20個)とGender。予想する列自身は除く
@@ -35,8 +35,8 @@ INPUT_FEATURES = [  # feature_definitions.pyのBASE_FEATURES(元の特徴量20�
     "Customer Type", "Departure/Arrival time convenient", "Arrival Delay in Minutes",
     "Departure Delay in Minutes", "Gender",
 ]
-both = pd.concat([pd.read_csv(f) for f in ("data/train.csv", "data/test.csv")], ignore_index=True)
-X = both[[c for c in INPUT_FEATURES if c != args.col]].copy()
+train_and_test = pd.concat([pd.read_csv(f) for f in ("data/train.csv", "data/test.csv")], ignore_index=True)
+X = train_and_test[[c for c in INPUT_FEATURES if c != args.rating_col]].copy()
 for c in X.select_dtypes(exclude="number").columns:  # 文字列のカテゴリ列(Class等)
     X[c] = X[c].astype("category")
 CATEGORY_ORDER = {  # カテゴリ列を予想するときの数値化(大きいほど「上の席・仕事・常連」)
@@ -44,7 +44,7 @@ CATEGORY_ORDER = {  # カテゴリ列を予想するときの数値化(大きい
     "Type of Travel": {"Personal Travel": 0, "Business travel": 1},
     "Customer Type": {"disloyal Customer": 0, "Loyal Customer": 1},
 }
-y = (both[args.col].map(CATEGORY_ORDER[args.col]) if args.col in CATEGORY_ORDER else both[args.col]).astype(int).values
+y = (train_and_test[args.rating_col].map(CATEGORY_ORDER[args.rating_col]) if args.rating_col in CATEGORY_ORDER else train_and_test[args.rating_col]).astype(int).values
 classes = np.unique(y)
 expected = np.zeros(len(X))
 start_time = time.time()
@@ -57,5 +57,5 @@ for k, (train_rows, valid_rows) in enumerate(KFold(5, shuffle=True, random_state
               callbacks=[lgb.early_stopping(50, verbose=False)])
     expected[valid_rows] = model.predict_proba(X.iloc[valid_rows]) @ model.classes_
     print(f"fold{k}: iter {model.best_iteration_} 実際との相関 {np.corrcoef(expected[valid_rows], y[valid_rows])[0, 1]:.3f} ({time.time() - start_time:.0f}秒)", flush=True)
-np.save(f"data/aux_ev_{args.name}.npy", expected)
+np.save(f"data/aux_ev_{args.save_name}.npy", expected)
 print(f"期待値 平均{expected.mean():.3f} 実際の平均{y.mean():.3f} 相関{np.corrcoef(expected, y)[0, 1]:.3f} R2 {1 - ((y - expected) ** 2).mean() / y.var():.3f}")

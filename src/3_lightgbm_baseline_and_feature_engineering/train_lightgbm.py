@@ -4,16 +4,16 @@
 ひとことで言うと: 「いつもの列」+「試したい列」で学習し直し、ベースラインと同じ行どうしで成績を比べる。
 やり方:
   - 特徴量の定義(BASE_FEATURES・FEATURE_BUILDERS・ADOPTED_FEATURES・TARGET_ENCODING_SPECS)は src/3_lightgbm_baseline_and_feature_engineering/feature_definitions.py から読み込む。
-  - ベースラインは元の特徴量20個(select_baseline_features.py --n 20と同一)+採用済みの特徴量(ADOPTED_FEATURES)。`--fe 名前`でFEATURE_BUILDERSに登録した列を足す。
+  - ベースラインは元の特徴量20個(select_baseline_features.py --n-features 20と同一)+採用済みの特徴量(ADOPTED_FEATURES)。`--feature 名前`でFEATURE_BUILDERSに登録した列を足す。
     比較相手のOOFは、最後に採用した特徴量を足したときのOOF(COMPARISON_OOF)。採用したらfeature_definitions.pyのADOPTED_FEATURESとここのCOMPARISON_OOFを更新する。
   - 比較は対応のあるブートストラップ(同じ行を復元抽出して、2つのOOFのAUC差を100回計算)で、差の揺れも出す。
     feature_fractionは既定の1.0なので、列を足しても既存の木の列の選ばれ方は変わらない(公平比較)。
 なぜ: 1施策1要素の原則。足した列以外の条件をそろえれば、差はその列の効果とみなせる。
-  - `--orig`: 元データ(人工データの元になった実在の満足度データ、約13万行、data/original/)を各foldの学習用の行にだけ足す。
+  - `--add-original-data`: 元データ(人工データの元になった実在の満足度データ、約13万行、data/original/)を各foldの学習用の行にだけ足す。
     検証用の行はコンペのデータのままなので、OOFは今までと同じ物差しで比べられる。元データの行もTEの満足率の計算に入る。
   - `--shap N`: fold0だけ学習し、検証foldからN行を抜き出してSHAP値(各列が予測をどれだけ押し上げ/押し下げたか)を
     LightGBM内蔵のTreeSHAP(pred_contrib)で計算し、data/shap_lgb_<tag>.npzに保存して終わる(図はanalyze_shap.py)。
-実行: python src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --fe zero_flags
+実行: python src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --feature zero_flags
 """
 import argparse
 import json
@@ -43,23 +43,23 @@ def rank_auc(labels, scores):
 
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--fe", required=True, choices=features.FEATURE_BUILDERS, help="足す特徴量の候補の名前(何も足さないときは none)")
+ap.add_argument("--feature", required=True, choices=features.FEATURE_BUILDERS, help="足す特徴量の候補の名前(何も足さないときは none)")
 ap.add_argument("--adopted", default=None, help="ADOPTED_FEATURESを一時的に置き換える(カンマ区切り。切り分け実験用)")
-ap.add_argument("--base-oof", default=None, help="COMPARISON_OOFを一時的に置き換える")
+ap.add_argument("--comparison-oof", default=None, help="COMPARISON_OOFを一時的に置き換える")
 ap.add_argument("--n-trees", type=int, default=0, help="0より大きいと早期停止を使わず木の本数をこの値に固定する")
-ap.add_argument("--es-holdout", type=float, default=0.0, help="0より大きいと、早期停止を検証foldではなく学習側のこの割合で行う(例0.05。OOFが甘くならない)")
-ap.add_argument("--cv-seed", type=int, default=None, help="fold分割のseedを変える(結果が1seedの偶然でないかの再確認用)。OOFは<fe>_cv<seed>の名前で保存")
+ap.add_argument("--early-stop-holdout", type=float, default=0.0, help="0より大きいと、早期停止を検証foldではなく学習側のこの割合で行う(例0.05。OOFが甘くならない)")
+ap.add_argument("--cv-seed", type=int, default=None, help="fold分割のseedを変える(結果が1seedの偶然でないかの再確認用)。OOFは<feature>_cv<seed>の名前で保存")
 ap.add_argument("--predict", action="store_true", help="各foldのモデルでtestを予測して平均し data/submission.csv を作る(提出用)")
-ap.add_argument("--orig", action="store_true", help="元データの行を各foldの学習用の行に足す")
+ap.add_argument("--add-original-data", action="store_true", help="元データの行を各foldの学習用の行に足す")
 ap.add_argument("--params", default=None, help="ハイパラの一部を一時的に置き換える(JSON、例 {\"num_leaves\": 63}。ハイパラを1つずつ調べる用)")
 ap.add_argument("--shap", type=int, default=0, help="fold0だけ学習し、検証foldのこの行数でSHAP値を保存して終わる")
 ap.add_argument("--export-fe", action="store_true", help="学習せず、特徴量をdata/fe36_train.csv・fe36_test.csvに書き出して終わる(train_catboost.pyの入力。TEの列はキーのまま)")
 ap.add_argument("--tuned", action="store_true", help="5のハイパラ調整で採用した設定(TUNED_PARAMS、学習率0.02)で学習する")
-ap.add_argument("--tag", default=None, help="OOF・test予測の保存名を指定する(提出用の構成が既存の実験のファイルを上書きしないため)")
+ap.add_argument("--save-name", default=None, help="OOF・test予測の保存名を指定する(提出用の構成が既存の実験のファイルを上書きしないため)")
 args = ap.parse_args()
 adopted = features.ADOPTED_FEATURES if args.adopted is None else [a for a in args.adopted.split(",") if a]
-dropped_cols = [c for a in adopted + [args.fe] for c in features.DROP_CANDIDATES.get(a, [])]  # 採用済みの「外す」候補も外す
-comparison_oof = COMPARISON_OOF if args.base_oof is None else args.base_oof
+dropped_cols = [c for a in adopted + [args.feature] for c in features.DROP_CANDIDATES.get(a, [])]  # 採用済みの「外す」候補も外す
+comparison_oof = COMPARISON_OOF if args.comparison_oof is None else args.comparison_oof
 # 5のハイパラ調整(tune_lightgbm.py)で採用した設定: Optunaの試行14の値に、学習率を0.05→0.02に下げたもの
 TUNED_PARAMS = {"num_leaves": 61, "min_child_samples": 5, "reg_lambda": 29.265955275846228, "reg_alpha": 0.3399216318523539,
                 "min_split_gain": 0.34853053056853356, "max_bin": 511, "subsample": 0.9039977941161244, "subsample_freq": 1,
@@ -75,23 +75,23 @@ features.DEFAULT_LGB_PARAMS = lgb_params  # 元データの先生役(orig_teache
 # データの置き場所・列名・foldの分け方(リポジトリのルートで実行する前提)
 config = {"train_csv": "data/train.csv", "test_csv": "data/test.csv", "id_col": "id", "target_col": "satisfaction",
           "cv": {"n_splits": 5, "seed": 42}}
-preprocess = features.PREPROCESSING.get(args.fe, lambda df: df)
+preprocess = features.PREPROCESSING.get(args.feature, lambda df: df)
 
 
 def build_features(df):
     """元の特徴量20個+採用済みの特徴量+今回の候補を並べ、外す候補の列を落とす。"""
-    parts = [df[features.BASE_FEATURES]] + [features.FEATURE_BUILDERS[a](df) for a in adopted] + [features.FEATURE_BUILDERS[args.fe](df)]
+    parts = [df[features.BASE_FEATURES]] + [features.FEATURE_BUILDERS[a](df) for a in adopted] + [features.FEATURE_BUILDERS[args.feature](df)]
     return pd.concat(parts, axis=1).drop(columns=dropped_cols)
 
 
 train = preprocess(pd.read_csv(config["train_csv"]))
 y = train[config["target_col"]].astype(int).values
 base_features = pd.concat([train[features.BASE_FEATURES]] + [features.FEATURE_BUILDERS[a](train) for a in adopted], axis=1)  # 今の土台
-X = pd.concat([base_features, features.FEATURE_BUILDERS[args.fe](train)], axis=1).drop(columns=dropped_cols)
+X = pd.concat([base_features, features.FEATURE_BUILDERS[args.feature](train)], axis=1).drop(columns=dropped_cols)
 for c in features.CATEGORICAL_COLUMNS:
     if c in X:
         X[c] = X[c].astype("category")
-if args.orig:
+if args.add_original_data:
     orig = preprocess(pd.concat([pd.read_csv(f"data/original/{f}.csv") for f in ("train", "test")], ignore_index=True))
     y_orig = (orig["satisfaction"] == "satisfied").astype(int).values  # 元データは文字列のラベル
     X_orig = build_features(orig)
@@ -111,20 +111,20 @@ if args.predict:
         X_test[c] = pd.Categorical(X_test[c], categories=X[c].cat.categories)  # trainと同じカテゴリ番号にそろえる
     test_pred = np.zeros(len(X_test))
 new_cols = list(X.columns[base_features.shape[1]:])
-print(f"{args.fe}: 外した列{dropped_cols} +{X.shape[1] - base_features.shape[1]}列 {new_cols}")
+print(f"{args.feature}: 外した列{dropped_cols} +{X.shape[1] - base_features.shape[1]}列 {new_cols}")
 
 oof = np.zeros(len(X))
 train_aucs, valid_aucs, best_iterations = [], [], []
 cv_seed = config["cv"]["seed"] if args.cv_seed is None else args.cv_seed
-tag = args.fe if args.cv_seed is None else f"{args.fe}_cv{args.cv_seed}"  # 既定seedのOOFを上書きしないため名前を分ける
-if args.orig:
+tag = args.feature if args.cv_seed is None else f"{args.feature}_cv{args.cv_seed}"  # 既定seedのOOFを上書きしないため名前を分ける
+if args.add_original_data:
     tag = "orig_" + tag
-if args.tag:
-    tag = args.tag
+if args.save_name:
+    tag = args.save_name
 folds = StratifiedKFold(n_splits=config["cv"]["n_splits"], shuffle=True, random_state=cv_seed)
 start_time = time.time()
 for k, (train_rows, valid_rows) in enumerate(folds.split(X, y)):
-    if args.orig:
+    if args.add_original_data:
         X_fit, y_fit = pd.concat([X.iloc[train_rows], X_orig], ignore_index=True), np.r_[y[train_rows], y_orig]
     else:
         X_fit, y_fit = X.iloc[train_rows], y[train_rows]
@@ -136,10 +136,10 @@ for k, (train_rows, valid_rows) in enumerate(folds.split(X, y)):
         # 早期停止を使わず木の本数を固定する(検証foldの答えを見ず、学習側の行も減らさない)
         model.set_params(n_estimators=args.n_trees)
         model.fit(X_fit, y_fit)
-    elif args.es_holdout:
+    elif args.early_stop_holdout:
         # 木の本数を学習側の一部(層化抽出)で決める。検証foldは採点だけに使い、答えを見て本数を選ばない
         stop_rows = np.zeros(len(y_fit), bool)
-        stop_rows[next(StratifiedShuffleSplit(1, test_size=args.es_holdout, random_state=k).split(X_fit, y_fit))[1]] = True
+        stop_rows[next(StratifiedShuffleSplit(1, test_size=args.early_stop_holdout, random_state=k).split(X_fit, y_fit))[1]] = True
         model.fit(X_fit[~stop_rows], y_fit[~stop_rows], eval_X=(X_fit[stop_rows],), eval_y=(y_fit[stop_rows],), eval_metric="auc",
                   callbacks=[lgb.early_stopping(100, verbose=False)])
     else:

@@ -86,7 +86,7 @@ EDAで、データの大まかな特徴をつかみ、特徴量エンジニア�
 
 ### (2) 特徴量エンジニアリング
 
-候補は1つずつ、土台と「土台+候補」をLightGBM(`train_lightgbm.py --fe 候補名`)で比べ、[2. 特徴量の採用基準](#2-特徴量の採用基準を設ける)の基準で採否を決めた。
+候補は1つずつ、土台と「土台+候補」をLightGBM(`train_lightgbm.py --feature 候補名`)で比べ、[2. 特徴量の採用基準](#2-特徴量の採用基準を設ける)の基準で採否を決めた。
 
 **採用した特徴量**(元の特徴量20個+作った特徴量16個=36個。OOF 0.95846→0.96046)。作り方で3つに分け、着想の出どころ(EDA・公開ノートブック・Discussion等)は「着想の根拠」の先頭に書いた。改善幅は、注記のないものは3seed平均。
 
@@ -388,7 +388,7 @@ src/
 │    inspect_public_oof.py
 └─ 9_public_oof_stacking/
      collect_public_oof.py、group_public_oof_by_model.py、extract_late_public_oof.py、make_final_submission.py、
-     final_stack_members.csv、late_public_oof_sources.csv
+     final_stack_members.csv、late_public_oof_extraction.csv
 ```
 
 ## 再現手順
@@ -397,14 +397,14 @@ src/
 uv sync
 # コンペのページからtrain.csvとtest.csvをdata/に置く。スクリプトはリポジトリのルートで実行する
 # 1. 評価の期待値を前もって計算する(採用した4項目)
-python src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --col "Online boarding" --name boarding
-python src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --col "Leg room service" --name legroom
-python src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --col "Checkin service" --name checkin
-python src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --col "Departure/Arrival time convenient" --name time
+python src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --rating-col "Online boarding" --save-name boarding
+python src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --rating-col "Leg room service" --save-name legroom
+python src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --rating-col "Checkin service" --save-name checkin
+python src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --rating-col "Departure/Arrival time convenient" --save-name time
 # 2. LightGBM(採用した特徴量で学習。--helpで各オプションの説明)
-python src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --fe none
+python src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --feature none
 # 3. CatBoostの入力(data/fe36_*.csv)を書き出す
-python src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --fe none --export-fe
+python src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --feature none --export-fe
 ```
 
 ## 開発について

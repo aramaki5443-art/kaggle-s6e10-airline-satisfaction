@@ -4,16 +4,16 @@
 ひとことで言うと: 226本の予測を「重み付きの足し算」でまとめる係(ロジスティック回帰)に、
   「この予測とこの予測が割れたら…」と条件で使い分ける係(浅いLightGBM)の意見を2割だけ足す。
 やり方:
-  - メンバーはfinal_stack_members.csvの順に読む(folder=ownは data/oof_<name>.npy、それ以外は data/<folder>/oof_<name>.npy。
-    testは同じ場所の test_<name>.npy)。各予測をlogit=log(p/(1-p))にして並べる。
+  - メンバーはfinal_stack_members.csvの順に読む(data_subfolder=ownは data/oof_<member_name>.npy、それ以外は data/<data_subfolder>/oof_<member_name>.npy。
+    testは同じ場所の test_<member_name>.npy)。各予測をlogit=log(p/(1-p))にして並べる。
   - 評価: 1段目とは別の5分割(--meta-seed、既定7)で、4つで学び残り1つで採点する。各foldで、ロジスティック回帰(L2、C=0.003)と
     浅いLightGBM(学習率0.03・葉15・葉の最小行数2000・列の抽出0.5・行の抽出0.8・L2=10。木の本数は学習行の1割で早期停止)を
     同じ行で学ぶ。2つの予測をそれぞれ平均0・標準偏差1にそろえ、0.8×ロジスティック回帰+0.2×LightGBMで混ぜてAUCを出す。
-  - --saveを付けると、全行で学び直してtestに当て、data/submission_<tag>.csvを作る。LightGBMは--lgb-seeds個のseedで平均する
+  - --saveを付けると、全行で学び直してtestに当て、data/submission_<save-name>.csvを作る。LightGBMは--lgb-seeds個のseedで平均する
     (testのぶれを減らすため。最終提出は5)。木の本数は評価時の平均の1.1倍(全行で学ぶぶん少し増やす)。
 なぜ: ロジスティック回帰は安定だが、メンバーどうしの条件付きの関係は表せない。浅く強く正則化した木を少し混ぜると、
   その関係を当てはめすぎずに拾える。混ぜる割合0.2と木の設定は公開ノートブックの値をそのまま使った(手元で選ぶと甘くなるため)。
-使い方: python src/9_public_oof_stacking/make_final_submission.py --tag final226 --lgb-seeds 5 --save
+使い方: python src/9_public_oof_stacking/make_final_submission.py --save-name final226 --lgb-seeds 5 --save
 """
 import argparse
 
@@ -28,9 +28,9 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--members", default="src/9_public_oof_stacking/final_stack_members.csv")
 ap.add_argument("--C", type=float, default=0.003, help="ロジスティック回帰の正則化の強さ(小さいほど強い)")
 ap.add_argument("--meta-seed", type=int, default=7, help="2段目の評価の5分割のseed")
-ap.add_argument("--w", type=float, default=0.2, help="LightGBMを混ぜる割合")
+ap.add_argument("--lgb-weight", type=float, default=0.2, help="LightGBMを混ぜる割合")
 ap.add_argument("--lgb-seeds", type=int, default=1, help="--saveのとき、全行で学ぶLightGBMをこの数のseedで平均する")
-ap.add_argument("--tag", default="final226")
+ap.add_argument("--save-name", default="final226")
 ap.add_argument("--save", action="store_true", help="全行で学び直してtestに当て、提出ファイルを作る")
 args = ap.parse_args()
 
@@ -38,10 +38,10 @@ members = pd.read_csv(args.members)
 y = pd.read_csv("data/train.csv", usecols=["satisfaction"])["satisfaction"].astype(int).values
 
 
-def member_path(member, kind):
-    """kind: "oof" または "test"。自分のモデル(folder=own)は data/ 直下、公開OOFは data/<folder>/ にある。"""
-    folder = "data" if member["folder"] == "own" else f"data/{member['folder']}"
-    return f"{folder}/{kind}_{member['name']}.npy"
+def member_path(member, prediction_type):
+    """prediction_type: "oof" または "test"。自分のモデル(data_subfolder=own)は data/ 直下、公開OOFは data/<data_subfolder>/ にある。"""
+    folder = "data" if member["data_subfolder"] == "own" else f"data/{member['data_subfolder']}"
+    return f"{folder}/{prediction_type}_{member['member_name']}.npy"
 
 
 def to_logit(p):
@@ -49,8 +49,8 @@ def to_logit(p):
     return np.log(p / (1 - p)).astype(np.float32)
 
 
-def load_logits(kind):
-    return np.column_stack([to_logit(np.load(member_path(m, kind)).astype(float).ravel()) for _, m in members.iterrows()])
+def load_logits(prediction_type):
+    return np.column_stack([to_logit(np.load(member_path(m, prediction_type)).astype(float).ravel()) for _, m in members.iterrows()])
 
 
 def standardize(v):
@@ -81,14 +81,14 @@ for k, (train_rows, valid_rows) in enumerate(folds):
     print(f"fold{k}: ロジスティック回帰 {roc_auc_score(y[valid_rows], lr_oof[valid_rows]):.6f} "
           f"LightGBM {roc_auc_score(y[valid_rows], lgb_oof[valid_rows]):.6f} 木{stacker.best_iteration}本", flush=True)
 print(f"ロジスティック回帰だけ {roc_auc_score(y, lr_oof):.6f} / LightGBMだけ {roc_auc_score(y, lgb_oof):.6f}")
-print(f"スタックのOOF AUC(w={args.w}): {roc_auc_score(y, (1 - args.w) * standardize(lr_oof) + args.w * standardize(lgb_oof)):.7f}")
+print(f"スタックのOOF AUC(LightGBMの割合{args.lgb_weight}): {roc_auc_score(y, (1 - args.lgb_weight) * standardize(lr_oof) + args.lgb_weight * standardize(lgb_oof)):.7f}")
 if args.save:
     test_logits = load_logits("test")
     lr_test = LogisticRegression(C=args.C, max_iter=2000).fit(oof_logits, y).decision_function(test_logits)
     n_trees = int(np.mean(best_iterations) * 1.1)
     lgb_test = np.mean([lgb.train({**STACKER_LGB_PARAMS, "seed": seed}, lgb.Dataset(oof_logits, y), n_trees).predict(test_logits, raw_score=True)
                         for seed in range(args.lgb_seeds)], axis=0)
-    score = (1 - args.w) * standardize(lr_test) + args.w * standardize(lgb_test)
+    score = (1 - args.lgb_weight) * standardize(lr_test) + args.lgb_weight * standardize(lgb_test)
     ids = pd.read_csv("data/test.csv", usecols=["id"])["id"]
-    pd.DataFrame({"id": ids, "satisfaction": 1 / (1 + np.exp(-score))}).to_csv(f"data/submission_{args.tag}.csv", index=False)
-    print(f"保存 data/submission_{args.tag}.csv")
+    pd.DataFrame({"id": ids, "satisfaction": 1 / (1 + np.exp(-score))}).to_csv(f"data/submission_{args.save_name}.csv", index=False)
+    print(f"保存 data/submission_{args.save_name}.csv")

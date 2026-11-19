@@ -1,4 +1,4 @@
-name,folder,notebook,oof_file,oof_key,test_file,test_key
+member_name,data_subfolder,kaggle_notebook,oof_file,oof_column,test_file,test_column
 km_ladder_lgb,pub_oof/new1026,koumeimaki/s6e10-feature-ladder-what-helps-lightgbm,oof_feature_ladder.csv,oof_lgb,test_feature_ladder.csv,pred_lgb
 km_ladder_xgb,pub_oof/new1026,koumeimaki/s6e10-feature-ladder-what-helps-lightgbm,oof_feature_ladder.csv,oof_xgb,test_feature_ladder.csv,pred_xgb
 th_xgb,pub_oof/new1026,thethiago28/notebook4ec6a89dc3,preds_lgbm_xgb_cat.npz,oof_xgb,preds_lgbm_xgb_cat.npz,test_xgb

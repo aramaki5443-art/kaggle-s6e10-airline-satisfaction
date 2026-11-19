@@ -86,7 +86,7 @@ EDAで、データの大まかな特徴をつかみ、特徴量エンジニア�
 
 ### (2) 特徴量エンジニアリング
 
-候補は1つずつ、土台と「土台+候補」をLightGBM(`train_lightgbm.py --fe 候補名`)で比べ、[2. 特徴量の採用基準](#2-特徴量の採用基準を設ける)の基準で採否を決めた。
+候補は1つずつ、土台と「土台+候補」をLightGBM(`train_lightgbm.py --feature 候補名`)で比べ、[2. 特徴量の採用基準](#2-特徴量の採用基準を設ける)の基準で採否を決めた。
 
 **採用した特徴量**(元の特徴量20個+作った特徴量16個=36個。OOF 0.95846→0.96046)。作り方で3つに分け、着想の出どころ(EDA・公開ノートブック・Discussion等)は「着想の根拠」の先頭に書いた。改善幅は、注記のないものは3seed平均。
 
@@ -353,7 +353,7 @@ flowchart LR
 | [group_public_oof_by_model.py](src/9_public_oof_stacking/group_public_oof_by_model.py) | メンバーを系統(TabPFN・ニューラルネット・CatBoost・LightGBMなど)に分ける |
 | [make_final_submission.py](src/9_public_oof_stacking/make_final_submission.py) | 最終の226本を2段目で混ぜ(ロジスティック回帰8割+浅いLightGBM2割)、提出ファイルを作る |
 | [final_stack_members.csv](src/9_public_oof_stacking/final_stack_members.csv) | 最終の226本の一覧(名前・系統・置き場所・出典) |
-| [extract_late_public_oof.py](src/9_public_oof_stacking/extract_late_public_oof.py)・[late_public_oof_sources.csv](src/9_public_oof_stacking/late_public_oof_sources.csv) | 後から足した11本を、ノートブックの出力から取り出す |
+| [extract_late_public_oof.py](src/9_public_oof_stacking/extract_late_public_oof.py)・[late_public_oof_extraction.csv](src/9_public_oof_stacking/late_public_oof_extraction.csv) | 後から足した11本を、ノートブックの出力から取り出す |
 
 ## 自身の工夫と参考にした外部情報
 
@@ -403,7 +403,7 @@ src/
 │    inspect_public_oof.py
 └─ 9_public_oof_stacking/
      collect_public_oof.py、group_public_oof_by_model.py、extract_late_public_oof.py、make_final_submission.py、
-     final_stack_members.csv、late_public_oof_sources.csv
+     final_stack_members.csv、late_public_oof_extraction.csv
 ```
 
 ## 使用技術と環境
@@ -464,31 +464,31 @@ uv run python -m zipfile -e data/playground-series-s6e10.zip data/
 # 1. EDA(ノートブックを開く)
 uv run jupyter notebook src/1_exploratory_data_analysis/EDA.ipynb
 
-# 2. ベースライン: 元の特徴量を、単変量AUCの高い順に1つずつ足す(--n 20で20個まで)
-uv run python src/3_lightgbm_baseline_and_feature_engineering/select_baseline_features.py --n 20
+# 2. ベースライン: 元の特徴量を、単変量AUCの高い順に1つずつ足す(--n-features 20で20個まで)
+uv run python src/3_lightgbm_baseline_and_feature_engineering/select_baseline_features.py --n-features 20
 
 # 3. 特徴量エンジニアリング
 #    評価の期待値を前もって計算する(採用した4項目)
-uv run python src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --col "Online boarding" --name boarding
-uv run python src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --col "Leg room service" --name legroom
-uv run python src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --col "Checkin service" --name checkin
-uv run python src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --col "Departure/Arrival time convenient" --name time
-#    採用した特徴量(36個)でLightGBMを学習し、testも予測する。候補を1つ試すときは --fe 候補名
-uv run python src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --fe none --predict
+uv run python src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --rating-col "Online boarding" --save-name boarding
+uv run python src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --rating-col "Leg room service" --save-name legroom
+uv run python src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --rating-col "Checkin service" --save-name checkin
+uv run python src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --rating-col "Departure/Arrival time convenient" --save-name time
+#    採用した特徴量(36個)でLightGBMを学習し、testも予測する。候補を1つ試すときは --feature 候補名
+uv run python src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --feature none --predict
 
 # 5. LightGBMのハイパラ探索(Optuna、結果はdata/optuna_lgb.dbに保存)と、採用した設定での学習
 uv run python src/5_lightgbm_hyperparameter_tuning/tune_lightgbm.py --n-trials 50
-uv run python src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --fe none --tuned --tag tuned_lr02 --predict
+uv run python src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --feature none --tuned --save-name tuned_lr02 --predict
 
 # 6. XGBoost
 uv run python src/6_xgboost_catboost_models/tune_xgboost.py --n-trials 50
-uv run python src/6_xgboost_catboost_models/train_xgboost.py --tuned --tag t35 --predict   # → data/oof_xgb_t35_cv42.npy
+uv run python src/6_xgboost_catboost_models/train_xgboost.py --tuned --save-name t35 --predict   # → data/oof_xgb_t35_cv42.npy
 
 # 6. CatBoost(KaggleのGPU)
-uv run python src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --fe none --export-fe   # 入力 data/fe36_train.csv・fe36_test.csv を書き出す
+uv run python src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --feature none --export-fe   # 入力 data/fe36_train.csv・fe36_test.csv を書き出す
 #   (1) この2つのCSVと src/6_xgboost_catboost_models/train_catboost.py を、Kaggleの非公開データセットにまとめてアップロードする
 #   (2) Kaggleで新しいノートブックを作り、(1)のデータセットを入力に付け、AcceleratorをGPUにする
-#   (3) セルで  !python /kaggle/input/<(1)のデータセット名>/train_catboost.py --only allcat_t21_cv42  を実行する(採用した設定だけを学習)
+#   (3) セルで  !python /kaggle/input/<(1)のデータセット名>/train_catboost.py --run allcat_t21_cv42  を実行する(採用した設定だけを学習)
 #   (4) 出力の oof_cat_allcat_t21_cv42.npy・test_cat_allcat_t21_cv42.npy を data/ に置く
 
 # 4・6. RealMLP・TabPFN(KaggleのGPU、公開ノートブックをもとに作る)
@@ -502,7 +502,7 @@ uv run python src/7_stacking_ensemble/evaluate_stacking.py LightGBM=data/oof_lgb
 
 # 8. 公開OOFを取得し、点検する
 #   データセットは data/pub_oof/raw/<所有者>_<データセット名>/ に、ノートブックの出力は data/pub_oof/raw/nb_<所有者>_<ノートブック名>/ に置く。
-#   使ったものの一覧は final_stack_members.csv の source 列。cdeotte氏の124本だけは data/pub_oof/cdeotte124/ に直接置く
+#   使ったものの一覧は final_stack_members.csv の published_by 列。cdeotte氏の124本だけは data/pub_oof/cdeotte124/ に直接置く
 uv run kaggle datasets download cdeotte/s6e10-124-public-oof-and-test-predictions -p data/pub_oof/cdeotte124 --unzip
 #   ほかのデータセットも同じく datasets download で、ノートブックの出力は kernels output で取る(例)
 uv run kaggle kernels output yekenot/ps-s6-e10-realmlp-pytabkit -p data/pub_oof/raw/nb_yekenot_ps-s6-e10-realmlp-pytabkit
@@ -510,21 +510,22 @@ uv run kaggle kernels output yekenot/ps-s6-e10-realmlp-pytabkit -p data/pub_oof/
 uv run python src/8_public_oof_inspection/inspect_public_oof.py data/pub_oof/cdeotte124
 
 # 9. 公開OOFの形をそろえ、226本を混ぜて提出ファイルを作る
-#   (1) 形をそろえ、同じ予測の写しを外す(ファイル名が独自の3本は --pair で名前を付ける)
+#   (1) 形をそろえ、同じ予測の写しを外す(ファイル名が独自の3本は --named-pair で名前を付ける)
 R=data/pub_oof/raw
-uv run python src/9_public_oof_stacking/collect_public_oof.py --ref data/pub_oof/cdeotte124 --out data/pub_oof/extra --pair   "najiam_07xgb=$R/najiama_s6e10-oof/07_XGBoost_oof.csv=$R/najiama_s6e10-oof/07_submission.csv"   "herman_cat=$R/nb_hermengardo_single-catboost-eda-ps6e10/oof_train.npy=$R/nb_hermengardo_single-catboost-eda-ps6e10/oof_test.npy"   "yekeno_realmlp=$R/nb_yekenot_ps-s6-e10-realmlp-pytabkit/oof_preds.csv=$R/nb_yekenot_ps-s6-e10-realmlp-pytabkit/submission.csv"
-#   (2) 後から足した11本: late_public_oof_sources.csv のノートブックの出力を data/pub_oof/raw_late/<所有者>_<ノートブック名>/ に置いて取り出す
+uv run python src/9_public_oof_stacking/collect_public_oof.py --reference-dir data/pub_oof/cdeotte124 --out-dir data/pub_oof/extra --named-pair   "najiam_07xgb=$R/najiama_s6e10-oof/07_XGBoost_oof.csv=$R/najiama_s6e10-oof/07_submission.csv"   "herman_cat=$R/nb_hermengardo_single-catboost-eda-ps6e10/oof_train.npy=$R/nb_hermengardo_single-catboost-eda-ps6e10/oof_test.npy"   "yekeno_realmlp=$R/nb_yekenot_ps-s6-e10-realmlp-pytabkit/oof_preds.csv=$R/nb_yekenot_ps-s6-e10-realmlp-pytabkit/submission.csv"
+#   (2) 後から足した11本: late_public_oof_extraction.csv のノートブックの出力を data/pub_oof/raw_late/<所有者>_<ノートブック名>/ に置いて取り出す
+#       (data_subfolder 列の pub_oof/new1026 などは「10月26日に足した公開OOF」のように、追加した日付ごとのフォルダ)
 uv run python src/9_public_oof_stacking/extract_late_public_oof.py
 #   (3) 226本を混ぜて提出ファイルを作る
-uv run python src/9_public_oof_stacking/make_final_submission.py --tag final226 --lgb-seeds 5 --save   # → data/submission_final226.csv
+uv run python src/9_public_oof_stacking/make_final_submission.py --save-name final226 --lgb-seeds 5 --save   # → data/submission_final226.csv
 ```
 
-採用したハイパラは、`train_lightgbm.py`・`train_xgboost.py`・`train_catboost.py`の`TUNED_PARAMS`に書いてある(LightGBM・XGBoostは`--tuned`で、CatBoostは`--only allcat_t21_cv42`で使う)。別の設定は`--params`(JSON)で渡せる。
+採用したハイパラは、`train_lightgbm.py`・`train_xgboost.py`・`train_catboost.py`の`TUNED_PARAMS`に書いてある(LightGBM・XGBoostは`--tuned`で、CatBoostは`--run allcat_t21_cv42`で使う)。別の設定は`--params`(JSON)で渡せる。
 
 ### 注意
 
 - 公開ノートブック・データセットは、後から更新されることがある。2026年11月の確認では、公開OOF 222本のうち1本(yekeno_realmlp)が、ノートブックの再実行で当時と少し違った(予測の相関0.99975)。
-- GPUや並列計算では足し算の順番が実行ごとに変わるため、同じ手順でもモデルのOOFが小数第5〜6位で少しずれる(計算のゆらぎ)。
+- GPUや並列計算では足し算の順番が実行ごとに変わるため、同じ手順でもモデルのOOFが小数第5〜6位で少しずれる(計算のゆらぎ)例えばCatBoostは、KaggleのGPUで同じデータ・同じ設定のまま2回学習しても、OOF AUCが0.00002ずれた。
 - CatBoostは手元のCPUでも動くが、GPUとは計算の仕方が違うため結果が変わり、時間も数時間以上かかる。再現はKaggleのGPUで行う。
 
 ### 再現の確認結果(2026年11月)

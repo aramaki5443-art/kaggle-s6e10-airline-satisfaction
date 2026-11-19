@@ -27,16 +27,16 @@ import feature_definitions as features  # noqa: E402
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--cv-seed", type=int, default=42)
-ap.add_argument("--tag", default="base")
+ap.add_argument("--save-name", default="base")
 ap.add_argument("--params", default=None, help="既定の一部を置き換える(JSON)")
 ap.add_argument("--adopted", default=None, help="使う特徴量をカンマ区切りで置き換える(空文字なら元の特徴量20個だけ。特徴量の違いで多様性が増えるかの確認用)")
 ap.add_argument("--predict", action="store_true", help="testも予測して保存する")
 ap.add_argument("--tuned", action="store_true", help="6のハイパラ調整(tune_xgboost.py)で採用した設定(TUNED_PARAMS)で学習する")
-ap.add_argument("--fe", default=None, help="ADOPTED_FEATURESに1つ足す特徴量(feature_definitions.pyのFEATURE_BUILDERSの名前。XGBoost向けの特徴量選び)")
+ap.add_argument("--feature", default=None, help="ADOPTED_FEATURESに1つ足す特徴量(feature_definitions.pyのFEATURE_BUILDERSの名前。XGBoost向けの特徴量選び)")
 args = ap.parse_args()
 adopted = features.ADOPTED_FEATURES if args.adopted is None else [a for a in args.adopted.split(",") if a]
-if args.fe:
-    adopted = adopted + [args.fe]
+if args.feature:
+    adopted = adopted + [args.feature]
 
 # データの置き場所・列名・foldの分け方(リポジトリのルートで実行する前提)
 config = {"train_csv": "data/train.csv", "test_csv": "data/test.csv", "id_col": "id", "target_col": "satisfaction",
@@ -75,7 +75,7 @@ for k, (train_rows, valid_rows) in enumerate(StratifiedKFold(5, shuffle=True, ra
     train_aucs.append(roc_auc_score(y[train_rows], model.predict_proba(X_fit)[:, 1])); valid_aucs.append(roc_auc_score(y[valid_rows], oof[valid_rows]))
     best_iterations.append(int(model.best_iteration))
     print(f"fold{k}: tr {train_aucs[-1]:.5f} va {valid_aucs[-1]:.5f} iter {best_iterations[-1]} {time.time() - start_time:.0f}s", flush=True)
-tag = f"{args.tag}_cv{args.cv_seed}"
+tag = f"{args.save_name}_cv{args.cv_seed}"
 result = {"tag": tag, "params": xgb_params, "tr": float(np.mean(train_aucs)), "oof": float(roc_auc_score(y, oof)),
           "va_folds": [float(v) for v in valid_aucs], "iters": best_iterations, "sec": round(time.time() - start_time)}
 print(json.dumps(result, ensure_ascii=False))

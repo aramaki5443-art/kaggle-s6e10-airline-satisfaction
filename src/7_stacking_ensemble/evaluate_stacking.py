@@ -25,7 +25,7 @@ from sklearn.model_selection import StratifiedKFold
 ap = argparse.ArgumentParser()
 ap.add_argument("members", nargs="+")
 ap.add_argument("--meta-seed", type=int, default=7)
-ap.add_argument("--step", type=float, default=0.05, help="順位ブレンドの重みの格子の幅")
+ap.add_argument("--weight-step", type=float, default=0.05, help="順位ブレンドの重みの格子の幅")
 args = ap.parse_args()
 
 y = pd.read_csv("data/train.csv", usecols=["satisfaction"])["satisfaction"].astype(int).values
@@ -37,8 +37,8 @@ ranks = np.column_stack([rankdata(predictions[:, j]) / len(y) for j in range(pre
 for j, name in enumerate(names):
     print(f"単体 {name}: {roc_auc_score(y, predictions[:, j]):.6f}")
 
-# 順位ブレンドの重みの候補(合計1になる組み合わせを --step 刻みで全部)
-weight_grid = [w for w in itertools.product(np.arange(0, 1 + 1e-9, args.step), repeat=len(names) - 1) if sum(w) <= 1 + 1e-9]
+# 順位ブレンドの重みの候補(合計1になる組み合わせを --weight-step 刻みで全部)
+weight_grid = [w for w in itertools.product(np.arange(0, 1 + 1e-9, args.weight_step), repeat=len(names) - 1) if sum(w) <= 1 + 1e-9]
 weight_grid = [np.array(list(w) + [1 - sum(w)]) for w in weight_grid]
 stack_oof, rank_oof = np.zeros(len(y)), np.zeros(len(y))
 coefs, chosen_weights = [], []

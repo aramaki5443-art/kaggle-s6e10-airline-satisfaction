@@ -1,4 +1,4 @@
-name,family,folder,source
+member_name,model_family,data_subfolder,published_by
 ar_cat_5f,cat,pub_oof/cdeotte124,cdeotte(s6e10-124-public-oof-and-test-predictions)
 ar_realmlp_5f,mlp,pub_oof/cdeotte124,cdeotte(s6e10-124-public-oof-and-test-predictions)
 ar_xgb_5f,xgb,pub_oof/cdeotte124,cdeotte(s6e10-124-public-oof-and-test-predictions)

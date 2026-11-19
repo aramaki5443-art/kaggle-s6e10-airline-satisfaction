@@ -3,12 +3,12 @@
 目的: RealMLP+LightGBMのアンサンブルに、3つ目の木のモデルとしてCatBoostを足す価値があるかを調べる。
 ひとことで言うと: LightGBMと同じ36列を、カテゴリ列の扱い方が違うCatBoostに学習させ、違う予測になるかを見る。
 やり方:
-  - 特徴量はfeature_definitions.pyの採用済みの列(`python src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --fe none --export-fe`でdata/fe36_*.csvに書き出す。
+  - 特徴量はfeature_definitions.pyの採用済みの列(`python src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --feature none --export-fe`でdata/fe36_*.csvに書き出す。
     Kaggleで動かすときは、このCSVをデータセットとして読み込ませる)。TEの2列(距離・距離×Class)だけは
     キーのまま受け取り、foldごとに計算する(target_encode_in_folds・target_encodeはfeature_definitions.pyと同一)。
   - Class・Type of Travel・Customer TypeはCatBoostのカテゴリ列として渡す(CatBoost独自の、答えを順番に使う集計で数値化される)。
   - 学習率0.05、木の本数は検証foldでの早期停止(100本)で決める(LightGBM・XGBoostの判定と同じ条件)。ほかは既定(depth 6等)。
-  - RUNSの各行(タグ, fold分割のseed, 元の特徴量20個だけか, 上書きするハイパラ, 距離の扱い)を順に学習し、oof_cat_<タグ>.npy・test_cat_<タグ>.npyを保存。--only タグ で1行だけ学習できる。
+  - RUNSの各行(タグ, fold分割のseed, 元の特徴量20個だけか, 上書きするハイパラ, 距離の扱い)を順に学習し、oof_cat_<タグ>.npy・test_cat_<タグ>.npyを保存。--run タグ で1行だけ学習できる。
   - 距離の扱い: None=数値のまま。"add"=数値の列は残し、同じ値の文字列コピーdist_catをカテゴリ列として足す。
     "rep"=Flight Distanceの数値列そのものをカテゴリ列に置き換える。このコンペで一番効いたのは距離を路線IDとして扱うこと
     (TEの2列)なので、CatBoost独自のカテゴリ処理(答えを行の順番に使う集計+カテゴリ同士の組み合わせ)で距離を扱えば、
@@ -39,11 +39,11 @@ TUNED_PARAMS = dict(depth=7, l2_leaf_reg=24.86317046031032, border_count=254, ra
 RUNS = [("allcat_t21_cv42", 42, False, TUNED_PARAMS, "allcat"), ("allcat_t21_cv0", 0, False, TUNED_PARAMS, "allcat"),
         ("allcat_t21_cv1", 1, False, TUNED_PARAMS, "allcat"), ("allcat_cv0", 0, False, {}, "allcat"), ("allcat_cv1", 1, False, {}, "allcat")]
 ap = argparse.ArgumentParser()
-ap.add_argument("--only", help="RUNSのうち、このタグの1行だけを学習する(例: allcat_t21_cv42 = 最終提出で使った設定)")
+ap.add_argument("--run", help="RUNSのうち、このタグの1行だけを学習する(例: allcat_t21_cv42 = 最終提出で使った設定)")
 args, _ = ap.parse_known_args()  # Kaggleのスクリプト実行で余分な引数が付いても止まらないように
-if args.only:
-    RUNS = [run for run in RUNS if run[0] == args.only]
-    assert RUNS, f"RUNSに{args.only}がない"
+if args.run:
+    RUNS = [run for run in RUNS if run[0] == args.run]
+    assert RUNS, f"RUNSに{args.run}がない"
 CATEGORICAL_COLUMNS = ["Customer Type", "Type of Travel", "Class"]
 TARGET_ENCODING_SPECS = {"te_distance_m3": ("Flight Distance", 3), "te_dist_class": (["Flight Distance", "Class"], 3)}
 N_BASE_FEATURES = 20  # 先頭20列が元の特徴量(feature_definitions.pyのBASE_FEATURES)

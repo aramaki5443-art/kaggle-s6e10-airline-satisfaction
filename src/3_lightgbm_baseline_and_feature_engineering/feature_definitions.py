@@ -3,7 +3,7 @@
 目的: 特徴量の作り方を1か所にまとめ、どのモデルのスクリプトからも同じ特徴量を使えるようにする。
 ひとことで言うと: 「材料の下ごしらえ」の手順書。学習や採点はしない(それは同じフォルダの train_lightgbm.py などが行う)。
 やり方:
-  - FEATURE_BUILDERS: 名前 → 関数(データを受け取り、足す列を返す)。候補は src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --fe 名前 で1つずつ判定する。
+  - FEATURE_BUILDERS: 名前 → 関数(データを受け取り、足す列を返す)。候補は src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --feature 名前 で1つずつ判定する。
   - ADOPTED_FEATURES: 判定で採用した特徴量の名前。モデルのスクリプトは元の特徴量20個(BASE_FEATURES)+ADOPTED_FEATURESで学習する。
   - TARGET_ENCODING_SPECS: 値ごとの満足率(Target Encoding)の列。答えを使うので、FEATURE_BUILDERSでは元の値だけを置き、
     学習ループの中でfoldごとに満足率へ置き換える(target_encode_in_folds)。
@@ -258,8 +258,8 @@ def frequency_encode(name, cols):
     # 残差との相関はほぼ0でも学習すると効くことがあるため、事前確認で落とさず学習で確かめる
     def build(df):
         # usecolsはCSVの列順で返すため、colsの順に並べ直してキーの文字列をそろえる
-        both = pd.concat([pd.read_csv(fn, usecols=cols)[cols] for fn in ("data/train.csv", "data/test.csv")])
-        counts = both.fillna(-1).astype(str).agg("|".join, axis=1).value_counts()
+        train_and_test = pd.concat([pd.read_csv(fn, usecols=cols)[cols] for fn in ("data/train.csv", "data/test.csv")])
+        counts = train_and_test.fillna(-1).astype(str).agg("|".join, axis=1).value_counts()
         return pd.DataFrame({name: df[cols].fillna(-1).astype(str).agg("|".join, axis=1).map(counts).values}, index=df.index)
     return build
 
@@ -277,7 +277,7 @@ def delay_combo(name):
     return build
 
 
-# 列を足さずに元の列を書き換える施策(--feで選ぶと、列を作る前にtrain・test・元データへ適用し、追加列は0本)
+# 列を足さずに元の列を書き換える施策(--featureで選ぶと、列を作る前にtrain・test・元データへ適用し、追加列は0本)
 PREPROCESSING = {
     # 到着遅延の欠損(train 292行・test 130行)を同じ人の出発遅延で埋める。欠損でない行の87%は到着=出発で、相関0.84
     "fill_arrdelay": lambda df: df.assign(**{"Arrival Delay in Minutes": df["Arrival Delay in Minutes"].fillna(df["Departure Delay in Minutes"])}),
@@ -326,12 +326,12 @@ def orig_rate(df, m=10, cols=None):
     # 下がるかを確かめる。少数の値の極端な率を抑えるため全体の満足率へm件分寄せる。元データに無い値は欠損
     orig = pd.concat([pd.read_csv(f"data/original/{f}.csv") for f in ("train", "test")], ignore_index=True)
     y_orig = (orig["satisfaction"] == "satisfied").astype(int)
-    out = {}
+    new_columns = {}
     for c in cols or BASE_FEATURES:
         stats = y_orig.groupby(orig[c]).agg(["sum", "count"])
         rate = (stats["sum"] + m * y_orig.mean()) / (stats["count"] + m)
-        out[f"org_{c}"] = df[c].map(rate).astype(float)
-    return pd.DataFrame(out, index=df.index)
+        new_columns[f"org_{c}"] = df[c].map(rate).astype(float)
+    return pd.DataFrame(new_columns, index=df.index)
 # 26列の上では20列版は悪化。評価・カテゴリは値の種類が少なく木が元の列で分けられ、飛行距離は既存のTEと重なるため、
 # 値の種類が多く既存のFEと重ならない年齢・遅延の3列だけに絞る
 ORIGINAL_RATE_COLUMNS = ["Age", "Departure Delay in Minutes", "Arrival Delay in Minutes"]
@@ -342,8 +342,8 @@ def route_mean(name, col):
     # colの平均を列にする(目的変数は使わない)。距離のTE(採用済み)は路線の満足率そのものだが、こちらは路線の
     # 「乗客の顔ぶれ・評価の傾向」で、少人数の路線でもラベルのぶれを含まない。路線の人数(=freq_dist)は不採用済み
     def build(df):
-        both = pd.concat([pd.read_csv(fn, usecols=["Flight Distance", col]) for fn in ("data/train.csv", "data/test.csv")])
-        return pd.DataFrame({name: df["Flight Distance"].map(both.groupby("Flight Distance")[col].mean()).values}, index=df.index)
+        train_and_test = pd.concat([pd.read_csv(fn, usecols=["Flight Distance", col]) for fn in ("data/train.csv", "data/test.csv")])
+        return pd.DataFrame({name: df["Flight Distance"].map(train_and_test.groupby("Flight Distance")[col].mean()).values}, index=df.index)
     return build
 
 
@@ -360,8 +360,8 @@ def route_share(name, col, val):
     # 路線(飛行距離の値)ごとの、colがvalである乗客の割合(train+test、目的変数不使用)(3つとも不採用)。距離×Class・距離×旅行目的のTE・回数は
     # 採用済みだが、こちらは路線の客層(ビジネス客の多い路線か)
     def build(df):
-        both = pd.concat([pd.read_csv(fn, usecols=["Flight Distance", col]) for fn in ("data/train.csv", "data/test.csv")])
-        share = (both[col] == val).groupby(both["Flight Distance"]).mean()
+        train_and_test = pd.concat([pd.read_csv(fn, usecols=["Flight Distance", col]) for fn in ("data/train.csv", "data/test.csv")])
+        share = (train_and_test[col] == val).groupby(train_and_test["Flight Distance"]).mean()
         return pd.DataFrame({name: df["Flight Distance"].map(share).values}, index=df.index)
     return build
 
@@ -369,8 +369,8 @@ def route_share(name, col, val):
 def route_std(name, col):
     # 路線ごとの評価の標準偏差(train+test、Wi-Fiを採用)。路線平均(rp_)が同じでも、評価がそろった路線とばらけた路線を区別する
     def build(df):
-        both = pd.concat([pd.read_csv(fn, usecols=["Flight Distance", col]) for fn in ("data/train.csv", "data/test.csv")])
-        return pd.DataFrame({name: df["Flight Distance"].map(both.groupby("Flight Distance")[col].std()).values}, index=df.index)
+        train_and_test = pd.concat([pd.read_csv(fn, usecols=["Flight Distance", col]) for fn in ("data/train.csv", "data/test.csv")])
+        return pd.DataFrame({name: df["Flight Distance"].map(train_and_test.groupby("Flight Distance")[col].std()).values}, index=df.index)
     return build
 
 
@@ -382,24 +382,24 @@ def group_deviation(name, keys, nums=None, z=False):
     # nums: 偏差を取る列(既定は年齢・距離・遅延2列)。z=True: グループの標準偏差で割る(グループごとに散らばりが違っても同じ物差しにする、不採用)
     nums = nums or {"age": "Age", "dist": "Flight Distance", "dep": "Departure Delay in Minutes", "arr": "Arrival Delay in Minutes"}
     def build(df):
-        both = pd.concat([pd.read_csv(fn, usecols=keys + list(nums.values())) for fn in ("data/train.csv", "data/test.csv")])
-        out = {}
+        train_and_test = pd.concat([pd.read_csv(fn, usecols=keys + list(nums.values())) for fn in ("data/train.csv", "data/test.csv")])
+        new_columns = {}
         for short, c in nums.items():
-            group_stats = both.groupby(keys)[c].agg(m="mean", s="std")
+            group_stats = train_and_test.groupby(keys)[c].agg(m="mean", s="std")
             row_stats = df[keys].merge(group_stats, left_on=keys, right_index=True, how="left")
-            out[f"{name}_{short}"] = (df[c].values - row_stats["m"].values) / (row_stats["s"].values if z else 1)
-        return pd.DataFrame(out, index=df.index)
+            new_columns[f"{name}_{short}"] = (df[c].values - row_stats["m"].values) / (row_stats["s"].values if z else 1)
+        return pd.DataFrame(new_columns, index=df.index)
     return build
 
 
-def route_zero(name, col, kind):
-    # 路線の0の割合(kind="zero")・0を除いた路線平均(kind="nz")。評価の0は「該当なし」に近く(0の人の満足率はWi-Fi 88.7%・
+def route_zero(name, col, mode):
+    # 路線の0の割合(mode="zero")・0を除いた路線平均(mode="nz")。評価の0は「該当なし」に近く(0の人の満足率はWi-Fi 88.7%・
     # オンライン予約70.8%・搭乗62.0%と全体44%から外れる)、0込みの路線平均(route_mean)では「0が多い路線」と「評価が低い路線」が
     # 混ざる。分けて渡せば、路線の利用のされ方(0の割合)と評価の高さ(0除外平均)を別々に使える。公開ノートブックは全て0込み
     def build(df):
-        both = pd.concat([pd.read_csv(fn, usecols=["Flight Distance", col]) for fn in ("data/train.csv", "data/test.csv")])
-        values = (both[col] == 0).astype(float) if kind == "zero" else both[col].replace(0, np.nan)
-        return pd.DataFrame({name: df["Flight Distance"].map(values.groupby(both["Flight Distance"]).mean()).values}, index=df.index)
+        train_and_test = pd.concat([pd.read_csv(fn, usecols=["Flight Distance", col]) for fn in ("data/train.csv", "data/test.csv")])
+        values = (train_and_test[col] == 0).astype(float) if mode == "zero" else train_and_test[col].replace(0, np.nan)
+        return pd.DataFrame({name: df["Flight Distance"].map(values.groupby(train_and_test["Flight Distance"]).mean()).values}, index=df.index)
     return build
 
 
@@ -428,8 +428,8 @@ def digits(name, col):
     # 欠損(到着遅延)は欠損のまま(0で埋めると遅延0分と混ざるため)
     def build(df):
         values = df[col].astype(float)
-        out = {f"{name}_d{k}": np.floor(values / 10 ** k) % 10 for k in range(4)}
-        return pd.DataFrame({k: x for k, x in out.items() if x.nunique() > 1}, index=df.index)
+        new_columns = {f"{name}_d{k}": np.floor(values / 10 ** k) % 10 for k in range(4)}
+        return pd.DataFrame({k: x for k, x in new_columns.items() if x.nunique() > 1}, index=df.index)
     return build
 
 
@@ -481,9 +481,9 @@ def gate_business(col):
     return build
 
 
-FEATURE_BUILDERS = {"none": none, "ev_boarding": expected_rating("ev_boarding"), "ev_legroom": expected_rating("ev_legroom"), **{f"ev_{n}": expected_rating(f"ev_{n}") for n in ("checkin", "onboard", "baggage", "food", "wifi", "clean", "seat", "booking", "ent", "gate", "time", "class", "travel", "cust")}, **{f"{k}_{n}": route_zero(f"{k}_{n}", c, kind) for n, c in (
+FEATURE_BUILDERS = {"none": none, "ev_boarding": expected_rating("ev_boarding"), "ev_legroom": expected_rating("ev_legroom"), **{f"ev_{n}": expected_rating(f"ev_{n}") for n in ("checkin", "onboard", "baggage", "food", "wifi", "clean", "seat", "booking", "ent", "gate", "time", "class", "travel", "cust")}, **{f"{k}_{n}": route_zero(f"{k}_{n}", c, mode) for n, c in (
                          ("wifi", "Inflight wifi service"), ("booking", "Ease of Online booking"), ("boarding", "Online boarding"))
-                         for k, kind in (("rz", "zero"), ("rnz", "nz"))},
+                         for k, mode in (("rz", "zero"), ("rnz", "nz"))},
                     "tok_dist": gpt2_token("tok_dist", "Flight Distance"), **{f"dg1_{n}_d{k}": digit1(f"dg1_{n}_d{k}", c, k) for n, c, ks in (
                          ("dist", "Flight Distance", range(4)), ("age", "Age", range(2)), ("depdelay", "Departure Delay in Minutes", range(3)),
                          ("arrdelay", "Arrival Delay in Minutes", range(3))) for k in ks},
@@ -551,8 +551,8 @@ def route_class_std(name, col):
     # 路線×Classごとの評価の標準偏差(追加候補B、不採用)。同じ路線でもBusinessとEcoで客層が違うため細かく分ける。人数が減る分ぶれやすい
     def build(df):
         keys = ["Flight Distance", "Class"]
-        both = pd.concat([pd.read_csv(fn, usecols=keys + [col]) for fn in ("data/train.csv", "data/test.csv")])
-        route_class_std_values = both.groupby(keys)[col].std().rename("s")
+        train_and_test = pd.concat([pd.read_csv(fn, usecols=keys + [col]) for fn in ("data/train.csv", "data/test.csv")])
+        route_class_std_values = train_and_test.groupby(keys)[col].std().rename("s")
         return pd.DataFrame({name: df[keys].merge(route_class_std_values, left_on=keys, right_index=True, how="left")["s"].values}, index=df.index)
     return build
 
