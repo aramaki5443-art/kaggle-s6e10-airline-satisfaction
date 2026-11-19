@@ -14,6 +14,7 @@
 使い方: python src/6_xgboost_catboost_models/tune_xgboost.py --n-trials 50
 """
 import argparse
+import sys
 import os
 import time
 
@@ -24,10 +25,9 @@ import xgboost as xgb
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold
 
-# feature_definitions.pyの特徴量の定義(関数・ADOPTED・TE)を読み込む
-src = open("src/3_lightgbm_baseline_and_feature_engineering/feature_definitions.py", encoding="utf-8").read()
-g = {"__name__": "fe_defs"}
-exec(compile(src, "feature_definitions.py", "exec"), g)
+# 特徴量の定義を読み込む(フォルダ名が数字で始まりパッケージにできないため、そのフォルダを検索パスに足す)
+sys.path.insert(0, "src/3_lightgbm_baseline_and_feature_engineering")
+import feature_definitions as features  # noqa: E402
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--n-trials", type=int, default=50)
@@ -37,45 +37,45 @@ args = ap.parse_args()
 # データの置き場所・列名(リポジトリのルートで実行する前提)
 train = pd.read_csv("data/train.csv")
 y = train["satisfaction"].astype(int).values
-X = pd.concat([train[g["BASE"]]] + [g["FE"][a](train) for a in g["ADOPTED"]], axis=1)
-for c in g["CAT"]:
+X = pd.concat([train[features.BASE_FEATURES]] + [features.FEATURE_BUILDERS[a](train) for a in features.ADOPTED_FEATURES], axis=1)
+for c in features.CATEGORICAL_COLUMNS:
     X[c] = X[c].astype("category")
 print(f"{X.shape[1]}列", flush=True)
 folds = []
-for k, (tr, va) in enumerate(StratifiedKFold(5, shuffle=True, random_state=42).split(X, y)):
-    Xtr, (Xva,) = g["te_fold"](X.iloc[tr], y[tr], [X.iloc[va]], seed=k)  # feature_definitions.pyと同じTE
-    folds.append((Xtr, y[tr], Xva, va))
+for k, (train_rows, valid_rows) in enumerate(StratifiedKFold(5, shuffle=True, random_state=42).split(X, y)):
+    X_fit, (X_valid,) = features.target_encode_in_folds(X.iloc[train_rows], y[train_rows], [X.iloc[valid_rows]], seed=k)  # feature_definitions.pyと同じTE
+    folds.append((X_fit, y[train_rows], X_valid, valid_rows))
 os.makedirs("data/optuna_xgb_oof", exist_ok=True)
 
-BASE = dict(learning_rate=0.05, n_estimators=10000, early_stopping_rounds=100, tree_method="hist", enable_categorical=True,
-            eval_metric="auc", random_state=42, n_jobs=-1)
-DEFAULT = dict(max_depth=6, min_child_weight=1.0, reg_lambda=1.0, reg_alpha=1e-3, gamma=0.0, max_bin=255,
-               subsample=1.0, colsample_bytree=1.0)
+FIXED_PARAMS = dict(learning_rate=0.05, n_estimators=10000, early_stopping_rounds=100, tree_method="hist", enable_categorical=True,
+                    eval_metric="auc", random_state=42, n_jobs=-1)
+DEFAULT_PARAMS = dict(max_depth=6, min_child_weight=1.0, reg_lambda=1.0, reg_alpha=1e-3, gamma=0.0, max_bin=255,
+                      subsample=1.0, colsample_bytree=1.0)
 
 
 def objective(trial):
-    p = dict(max_depth=trial.suggest_int("max_depth", 3, 12),
-             min_child_weight=trial.suggest_float("min_child_weight", 0.1, 100, log=True),  # 葉の最少の重み(葉の最少人数に相当)
-             reg_lambda=trial.suggest_float("reg_lambda", 1e-3, 100, log=True),  # L2
-             reg_alpha=trial.suggest_float("reg_alpha", 1e-3, 10, log=True),  # L1
-             gamma=trial.suggest_float("gamma", 0.0, 1.0),  # 分岐に必要な最小の改善(LightGBMのmin_split_gain)
-             max_bin=trial.suggest_categorical("max_bin", [63, 127, 255, 511, 1023]),
-             subsample=trial.suggest_float("subsample", 0.5, 1.0),  # 行の間引き
-             colsample_bytree=trial.suggest_float("colsample_bytree", 0.3, 1.0))  # 列の間引き
-    oof = np.zeros(len(y)); aucs, iters = [], []; t0 = time.time()
-    for k, (Xtr, ytr, Xva, va) in enumerate(folds):
-        m = xgb.XGBClassifier(**BASE, **p)
-        m.fit(Xtr, ytr, eval_set=[(Xva, y[va])], verbose=False)
-        oof[va] = m.predict_proba(Xva)[:, 1]
-        aucs.append(roc_auc_score(y[va], oof[va])); iters.append(int(m.best_iteration))
+    params = dict(max_depth=trial.suggest_int("max_depth", 3, 12),
+                  min_child_weight=trial.suggest_float("min_child_weight", 0.1, 100, log=True),  # 葉の最少の重み(葉の最少人数に相当)
+                  reg_lambda=trial.suggest_float("reg_lambda", 1e-3, 100, log=True),  # L2
+                  reg_alpha=trial.suggest_float("reg_alpha", 1e-3, 10, log=True),  # L1
+                  gamma=trial.suggest_float("gamma", 0.0, 1.0),  # 分岐に必要な最小の改善(LightGBMのmin_split_gain)
+                  max_bin=trial.suggest_categorical("max_bin", [63, 127, 255, 511, 1023]),
+                  subsample=trial.suggest_float("subsample", 0.5, 1.0),  # 行の間引き
+                  colsample_bytree=trial.suggest_float("colsample_bytree", 0.3, 1.0))  # 列の間引き
+    oof = np.zeros(len(y)); aucs, best_iterations = [], []; start_time = time.time()
+    for k, (X_fit, y_fit, X_valid, valid_rows) in enumerate(folds):
+        model = xgb.XGBClassifier(**FIXED_PARAMS, **params)
+        model.fit(X_fit, y_fit, eval_set=[(X_valid, y[valid_rows])], verbose=False)
+        oof[valid_rows] = model.predict_proba(X_valid)[:, 1]
+        aucs.append(roc_auc_score(y[valid_rows], oof[valid_rows])); best_iterations.append(int(model.best_iteration))
         trial.report(float(np.mean(aucs)), k)
         if trial.should_prune():
-            print(f"#{trial.number} 打ち切り fold{k} 平均{np.mean(aucs):.6f} {time.time() - t0:.0f}s {p}", flush=True)
+            print(f"#{trial.number} 打ち切り fold{k} 平均{np.mean(aucs):.6f} {time.time() - start_time:.0f}s {params}", flush=True)
             raise optuna.TrialPruned()
     auc = roc_auc_score(y, oof)
     np.save(f"data/optuna_xgb_oof/oof_{args.study}_t{trial.number}.npy", oof)
-    trial.set_user_attr("iters", iters); trial.set_user_attr("va_folds", aucs); trial.set_user_attr("sec", round(time.time() - t0))
-    print(f"#{trial.number} OOF {auc:.6f} iters {iters} {time.time() - t0:.0f}s {p}", flush=True)
+    trial.set_user_attr("iters", best_iterations); trial.set_user_attr("va_folds", aucs); trial.set_user_attr("sec", round(time.time() - start_time))
+    print(f"#{trial.number} OOF {auc:.6f} iters {best_iterations} {time.time() - start_time:.0f}s {params}", flush=True)
     return auc
 
 
@@ -83,9 +83,9 @@ study = optuna.create_study(study_name=args.study, storage="sqlite:///data/optun
                             sampler=optuna.samplers.TPESampler(seed=42),
                             pruner=optuna.pruners.MedianPruner(n_startup_trials=8, n_warmup_steps=1))
 if len(study.trials) == 0:
-    study.enqueue_trial(DEFAULT)
+    study.enqueue_trial(DEFAULT_PARAMS)
 done = len([t for t in study.trials if t.state.is_finished()])
 study.optimize(objective, n_trials=max(0, args.n_trials - done))
-top = sorted([t for t in study.trials if t.value is not None], key=lambda t: -t.value)[:5]
-for t in top:
+best_trials = sorted([t for t in study.trials if t.value is not None], key=lambda t: -t.value)[:5]
+for t in best_trials:
     print(f"上位 #{t.number} OOF {t.value:.6f} {t.params} iters {t.user_attrs.get('iters')}")

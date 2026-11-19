@@ -28,7 +28,7 @@ ap.add_argument("--col", required=True)
 ap.add_argument("--name", required=True)
 args = ap.parse_args()
 
-FEATS = [  # feature_definitions.pyのBASE(元の特徴量20個)とGender。予想する列自身は除く
+INPUT_FEATURES = [  # feature_definitions.pyのBASE_FEATURES(元の特徴量20個)とGender。予想する列自身は除く
     "Online boarding", "Class", "Inflight entertainment", "Inflight wifi service", "Seat comfort",
     "Flight Distance", "Type of Travel", "On-board service", "Cleanliness", "Leg room service", "Age",
     "Ease of Online booking", "Baggage handling", "Checkin service", "Food and drink", "Gate location",
@@ -36,26 +36,26 @@ FEATS = [  # feature_definitions.pyのBASE(元の特徴量20個)とGender。予�
     "Departure Delay in Minutes", "Gender",
 ]
 both = pd.concat([pd.read_csv(f) for f in ("data/train.csv", "data/test.csv")], ignore_index=True)
-X = both[[c for c in FEATS if c != args.col]].copy()
+X = both[[c for c in INPUT_FEATURES if c != args.col]].copy()
 for c in X.select_dtypes(exclude="number").columns:  # 文字列のカテゴリ列(Class等)
     X[c] = X[c].astype("category")
-CAT_ORDER = {  # カテゴリ列を予想するときの数値化(大きいほど「上の席・仕事・常連」)
+CATEGORY_ORDER = {  # カテゴリ列を予想するときの数値化(大きいほど「上の席・仕事・常連」)
     "Class": {"Eco": 0, "Eco Plus": 1, "Business": 2},
     "Type of Travel": {"Personal Travel": 0, "Business travel": 1},
     "Customer Type": {"disloyal Customer": 0, "Loyal Customer": 1},
 }
-y = (both[args.col].map(CAT_ORDER[args.col]) if args.col in CAT_ORDER else both[args.col]).astype(int).values
+y = (both[args.col].map(CATEGORY_ORDER[args.col]) if args.col in CATEGORY_ORDER else both[args.col]).astype(int).values
 classes = np.unique(y)
-ev = np.zeros(len(X))
-t0 = time.time()
-for k, (tr, va) in enumerate(KFold(5, shuffle=True, random_state=0).split(X)):
-    m = lgb.LGBMClassifier(objective="multiclass" if len(classes) > 2 else "binary", learning_rate=0.1, n_estimators=2000, random_state=0, verbose=-1)
-    # 早期停止用に学習側の一部を取り分ける(予想を出す行va自身は使わない)
+expected = np.zeros(len(X))
+start_time = time.time()
+for k, (train_rows, valid_rows) in enumerate(KFold(5, shuffle=True, random_state=0).split(X)):
+    model = lgb.LGBMClassifier(objective="multiclass" if len(classes) > 2 else "binary", learning_rate=0.1, n_estimators=2000, random_state=0, verbose=-1)
+    # 早期停止用に学習側の一部を取り分ける(予想を出す行valid_rows自身は使わない)
     rng = np.random.default_rng(k)
-    es = rng.random(len(tr)) < 0.1
-    m.fit(X.iloc[tr[~es]], y[tr[~es]], eval_X=(X.iloc[tr[es]],), eval_y=(y[tr[es]],),
-          callbacks=[lgb.early_stopping(50, verbose=False)])
-    ev[va] = m.predict_proba(X.iloc[va]) @ m.classes_
-    print(f"fold{k}: iter {m.best_iteration_} 実際との相関 {np.corrcoef(ev[va], y[va])[0, 1]:.3f} ({time.time() - t0:.0f}秒)", flush=True)
-np.save(f"data/aux_ev_{args.name}.npy", ev)
-print(f"期待値 平均{ev.mean():.3f} 実際の平均{y.mean():.3f} 相関{np.corrcoef(ev, y)[0, 1]:.3f} R2 {1 - ((y - ev) ** 2).mean() / y.var():.3f}")
+    stop_rows = rng.random(len(train_rows)) < 0.1
+    model.fit(X.iloc[train_rows[~stop_rows]], y[train_rows[~stop_rows]], eval_X=(X.iloc[train_rows[stop_rows]],), eval_y=(y[train_rows[stop_rows]],),
+              callbacks=[lgb.early_stopping(50, verbose=False)])
+    expected[valid_rows] = model.predict_proba(X.iloc[valid_rows]) @ model.classes_
+    print(f"fold{k}: iter {model.best_iteration_} 実際との相関 {np.corrcoef(expected[valid_rows], y[valid_rows])[0, 1]:.3f} ({time.time() - start_time:.0f}秒)", flush=True)
+np.save(f"data/aux_ev_{args.name}.npy", expected)
+print(f"期待値 平均{expected.mean():.3f} 実際の平均{y.mean():.3f} 相関{np.corrcoef(expected, y)[0, 1]:.3f} R2 {1 - ((y - expected) ** 2).mean() / y.var():.3f}")

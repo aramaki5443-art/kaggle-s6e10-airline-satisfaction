@@ -19,27 +19,27 @@ from scipy.stats import spearmanr
 from sklearn.metrics import roc_auc_score
 
 sys.stdout.reconfigure(encoding="utf-8")
-d = sys.argv[1]
+folder = sys.argv[1]
 y = pd.read_csv("data/train.csv", usecols=["satisfaction"])["satisfaction"].astype(int).values
 n_test = len(pd.read_csv("data/test.csv", usecols=["id"]))
-ref = np.load("data/oof_realmlp_e4_avg2.npy")
-idx = np.random.default_rng(0).choice(len(y), 100000, replace=False)  # 相関は10万行で計算(速さのため)
+own_realmlp = np.load("data/oof_realmlp_e4_avg2.npy")
+sample_rows = np.random.default_rng(0).choice(len(y), 100000, replace=False)  # 相関は10万行で計算(速さのため)
 rows = []
-for f in sorted(glob.glob(f"{d}/oof_*.npy")):
-    name = os.path.basename(f)[4:-4]
-    o = np.load(f).astype(float).ravel()
-    tf = f"{d}/test_{name}.npy"
-    t = np.load(tf).astype(float).ravel() if os.path.exists(tf) else None
-    r = {"name": name, "n": len(o), "nan": int(np.isnan(o).sum()), "min": o.min(), "max": o.max(),
-         "test_n": None if t is None else len(t), "test_mean": None if t is None else float(np.nanmean(t))}
-    if len(o) == len(y) and r["nan"] == 0:
-        r["auc"] = roc_auc_score(y, o); r["corr_rmlp"] = spearmanr(o[idx], ref[idx])[0]
-    rows.append(r)
-df = pd.DataFrame(rows)
-ok = (df["n"] == len(y)) & (df["nan"] == 0) & (df["test_n"] == n_test)
-df["判定"] = np.where(~ok, "形が合わない", np.where(df["auc"] > 0.9617, "要確認(高すぎ)", "OK"))
-df.to_csv(f"{d}/_inspect.csv", index=False)
-print(df["判定"].value_counts().to_string())
-print(df.sort_values("auc", ascending=False).head(12)[["name", "auc", "corr_rmlp", "min", "max", "test_mean", "判定"]].to_string(index=False))
-print(df[df["判定"] != "OK"][["name", "n", "nan", "test_n", "auc", "判定"]].to_string(index=False))
-print("AUCの分布", df["auc"].describe().round(6).to_dict())
+for oof_file in sorted(glob.glob(f"{folder}/oof_*.npy")):
+    name = os.path.basename(oof_file)[4:-4]
+    oof = np.load(oof_file).astype(float).ravel()
+    test_file = f"{folder}/test_{name}.npy"
+    test = np.load(test_file).astype(float).ravel() if os.path.exists(test_file) else None
+    row = {"name": name, "n": len(oof), "nan": int(np.isnan(oof).sum()), "min": oof.min(), "max": oof.max(),
+           "test_n": None if test is None else len(test), "test_mean": None if test is None else float(np.nanmean(test))}
+    if len(oof) == len(y) and row["nan"] == 0:
+        row["auc"] = roc_auc_score(y, oof); row["corr_rmlp"] = spearmanr(oof[sample_rows], own_realmlp[sample_rows])[0]
+    rows.append(row)
+result = pd.DataFrame(rows)
+shape_ok = (result["n"] == len(y)) & (result["nan"] == 0) & (result["test_n"] == n_test)
+result["判定"] = np.where(~shape_ok, "形が合わない", np.where(result["auc"] > 0.9617, "要確認(高すぎ)", "OK"))
+result.to_csv(f"{folder}/_inspect.csv", index=False)
+print(result["判定"].value_counts().to_string())
+print(result.sort_values("auc", ascending=False).head(12)[["name", "auc", "corr_rmlp", "min", "max", "test_mean", "判定"]].to_string(index=False))
+print(result[result["判定"] != "OK"][["name", "n", "nan", "test_n", "auc", "判定"]].to_string(index=False))
+print("AUCの分布", result["auc"].describe().round(6).to_dict())

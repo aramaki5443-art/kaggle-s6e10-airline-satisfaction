@@ -519,7 +519,7 @@ uv run python src/9_public_oof_stacking/extract_late_public_oof.py
 uv run python src/9_public_oof_stacking/make_final_submission.py --tag final226 --lgb-seeds 5 --save   # → data/submission_final226.csv
 ```
 
-採用したハイパラは、`train_lightgbm.py`・`train_xgboost.py`の`TUNED`とCatBoostの`T21`に書いてある(`--tuned`で使う)。別の設定は`--params`(JSON)で渡せる。
+採用したハイパラは、`train_lightgbm.py`・`train_xgboost.py`・`train_catboost.py`の`TUNED_PARAMS`に書いてある(LightGBM・XGBoostは`--tuned`で、CatBoostは`--only allcat_t21_cv42`で使う)。別の設定は`--params`(JSON)で渡せる。
 
 ### 注意
 

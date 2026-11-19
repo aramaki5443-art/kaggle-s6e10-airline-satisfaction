@@ -30,23 +30,24 @@ args = ap.parse_args()
 
 y = pd.read_csv("data/train.csv", usecols=["satisfaction"])["satisfaction"].astype(int).values
 names = [m.split("=")[0] for m in args.members]
-P = np.column_stack([np.load(m.split("=")[1]) for m in args.members])
+predictions = np.column_stack([np.load(m.split("=")[1]) for m in args.members])
 eps = 1e-6
-L = np.log(np.clip(P, eps, 1 - eps) / (1 - np.clip(P, eps, 1 - eps)))
-R = np.column_stack([rankdata(P[:, j]) / len(y) for j in range(P.shape[1])])
-for j, n in enumerate(names):
-    print(f"単体 {n}: {roc_auc_score(y, P[:, j]):.6f}")
+logits = np.log(np.clip(predictions, eps, 1 - eps) / (1 - np.clip(predictions, eps, 1 - eps)))
+ranks = np.column_stack([rankdata(predictions[:, j]) / len(y) for j in range(predictions.shape[1])])
+for j, name in enumerate(names):
+    print(f"単体 {name}: {roc_auc_score(y, predictions[:, j]):.6f}")
 
-grid = [w for w in itertools.product(np.arange(0, 1 + 1e-9, args.step), repeat=len(names) - 1) if sum(w) <= 1 + 1e-9]
-grid = [np.array(list(w) + [1 - sum(w)]) for w in grid]
-o_stack, o_rank = np.zeros(len(y)), np.zeros(len(y))
-coefs, wsel = [], []
-for tr, va in StratifiedKFold(5, shuffle=True, random_state=args.meta_seed).split(L, y):
-    m = LogisticRegression(C=1.0, max_iter=1000).fit(L[tr], y[tr])
-    o_stack[va] = m.decision_function(L[va]); coefs.append(m.coef_[0])
+# 順位ブレンドの重みの候補(合計1になる組み合わせを --step 刻みで全部)
+weight_grid = [w for w in itertools.product(np.arange(0, 1 + 1e-9, args.step), repeat=len(names) - 1) if sum(w) <= 1 + 1e-9]
+weight_grid = [np.array(list(w) + [1 - sum(w)]) for w in weight_grid]
+stack_oof, rank_oof = np.zeros(len(y)), np.zeros(len(y))
+coefs, chosen_weights = [], []
+for train_rows, valid_rows in StratifiedKFold(5, shuffle=True, random_state=args.meta_seed).split(logits, y):
+    stacker = LogisticRegression(C=1.0, max_iter=1000).fit(logits[train_rows], y[train_rows])
+    stack_oof[valid_rows] = stacker.decision_function(logits[valid_rows]); coefs.append(stacker.coef_[0])
     # 順位ブレンドの重みも学習側の行だけで決める(採点する行の答えを見ない)
-    sc = [roc_auc_score(y[tr], R[tr] @ w) for w in grid]
-    w = grid[int(np.argmax(sc))]; wsel.append(w)
-    o_rank[va] = R[va] @ w
-print(f"stack(LR logit) OOF {roc_auc_score(y, o_stack):.6f} 係数平均 {np.round(np.mean(coefs, 0), 3).tolist()}")
-print(f"rank(重みfold外) OOF {roc_auc_score(y, o_rank):.6f} 重み {[np.round(w, 2).tolist() for w in wsel]}")
+    scores = [roc_auc_score(y[train_rows], ranks[train_rows] @ w) for w in weight_grid]
+    best_weight = weight_grid[int(np.argmax(scores))]; chosen_weights.append(best_weight)
+    rank_oof[valid_rows] = ranks[valid_rows] @ best_weight
+print(f"stack(LR logit) OOF {roc_auc_score(y, stack_oof):.6f} 係数平均 {np.round(np.mean(coefs, 0), 3).tolist()}")
+print(f"rank(重みfold外) OOF {roc_auc_score(y, rank_oof):.6f} 重み {[np.round(w, 2).tolist() for w in chosen_weights]}")

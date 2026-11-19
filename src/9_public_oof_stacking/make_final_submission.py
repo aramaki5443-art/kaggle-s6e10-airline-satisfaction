@@ -35,38 +35,60 @@ ap.add_argument("--save", action="store_true", help="全行で学び直してtes
 args = ap.parse_args()
 
 members = pd.read_csv(args.members)
-path = lambda r, kind: f"data/{kind}_{r['name']}.npy" if r["folder"] == "own" else f"data/{r['folder']}/{kind}_{r['name']}.npy"
 y = pd.read_csv("data/train.csv", usecols=["satisfaction"])["satisfaction"].astype(int).values
-lg = lambda v: np.log(np.clip(v, 1e-6, 1 - 1e-6) / (1 - np.clip(v, 1e-6, 1 - 1e-6))).astype(np.float32)
-X = np.column_stack([lg(np.load(path(r, "oof")).astype(float).ravel()) for _, r in members.iterrows()])
-print(f"メンバー{X.shape[1]}本", flush=True)
-P = dict(objective="binary", learning_rate=0.03, num_leaves=15, min_data_in_leaf=2000, feature_fraction=0.5,
-         bagging_fraction=0.8, bagging_freq=1, lambda_l2=10.0, verbose=-1, seed=0)
 
 
-def fit_lgb(Xtr, ytr):
+def member_path(member, kind):
+    """kind: "oof" または "test"。自分のモデル(folder=own)は data/ 直下、公開OOFは data/<folder>/ にある。"""
+    folder = "data" if member["folder"] == "own" else f"data/{member['folder']}"
+    return f"{folder}/{kind}_{member['name']}.npy"
+
+
+def to_logit(p):
+    p = np.clip(p, 1e-6, 1 - 1e-6)
+    return np.log(p / (1 - p)).astype(np.float32)
+
+
+def load_logits(kind):
+    return np.column_stack([to_logit(np.load(member_path(m, kind)).astype(float).ravel()) for _, m in members.iterrows()])
+
+
+def standardize(v):
+    return (v - v.mean()) / v.std()
+
+
+oof_logits = load_logits("oof")
+print(f"メンバー{oof_logits.shape[1]}本", flush=True)
+STACKER_LGB_PARAMS = dict(objective="binary", learning_rate=0.03, num_leaves=15, min_data_in_leaf=2000, feature_fraction=0.5,
+                          bagging_fraction=0.8, bagging_freq=1, lambda_l2=10.0, verbose=-1, seed=0)
+
+
+def train_lightgbm_stacker(X_train, y_train):
     # 木の本数は学習行の1割で決める(採点するfoldの答えは使わない)
-    a, b, ya, yb = train_test_split(Xtr, ytr, test_size=0.1, stratify=ytr, random_state=0)
-    return lgb.train(P, lgb.Dataset(a, ya), 5000, valid_sets=[lgb.Dataset(b, yb)],
+    X_fit, X_stop, y_fit, y_stop = train_test_split(X_train, y_train, test_size=0.1, stratify=y_train, random_state=0)
+    return lgb.train(STACKER_LGB_PARAMS, lgb.Dataset(X_fit, y_fit), 5000, valid_sets=[lgb.Dataset(X_stop, y_stop)],
                      callbacks=[lgb.early_stopping(100, verbose=False)])
 
 
-z = lambda v: (v - v.mean()) / v.std()
-lr_oof, gb_oof, iters = np.zeros(len(y)), np.zeros(len(y)), []
-for k, (tr, va) in enumerate(StratifiedKFold(5, shuffle=True, random_state=args.meta_seed).split(X, y)):
-    lr_oof[va] = LogisticRegression(C=args.C, max_iter=2000).fit(X[tr], y[tr]).decision_function(X[va])
-    m = fit_lgb(X[tr], y[tr])
-    gb_oof[va] = m.predict(X[va], raw_score=True)
-    iters.append(m.best_iteration)
-    print(f"fold{k}: ロジスティック回帰 {roc_auc_score(y[va], lr_oof[va]):.6f} LightGBM {roc_auc_score(y[va], gb_oof[va]):.6f} 木{m.best_iteration}本", flush=True)
-print(f"ロジスティック回帰だけ {roc_auc_score(y, lr_oof):.6f} / LightGBMだけ {roc_auc_score(y, gb_oof):.6f}")
-print(f"スタックのOOF AUC(w={args.w}): {roc_auc_score(y, (1 - args.w) * z(lr_oof) + args.w * z(gb_oof)):.7f}")
+lr_oof, lgb_oof, best_iterations = np.zeros(len(y)), np.zeros(len(y)), []
+folds = StratifiedKFold(5, shuffle=True, random_state=args.meta_seed).split(oof_logits, y)
+for k, (train_rows, valid_rows) in enumerate(folds):
+    X_train, y_train, X_valid = oof_logits[train_rows], y[train_rows], oof_logits[valid_rows]
+    lr_oof[valid_rows] = LogisticRegression(C=args.C, max_iter=2000).fit(X_train, y_train).decision_function(X_valid)
+    stacker = train_lightgbm_stacker(X_train, y_train)
+    lgb_oof[valid_rows] = stacker.predict(X_valid, raw_score=True)
+    best_iterations.append(stacker.best_iteration)
+    print(f"fold{k}: ロジスティック回帰 {roc_auc_score(y[valid_rows], lr_oof[valid_rows]):.6f} "
+          f"LightGBM {roc_auc_score(y[valid_rows], lgb_oof[valid_rows]):.6f} 木{stacker.best_iteration}本", flush=True)
+print(f"ロジスティック回帰だけ {roc_auc_score(y, lr_oof):.6f} / LightGBMだけ {roc_auc_score(y, lgb_oof):.6f}")
+print(f"スタックのOOF AUC(w={args.w}): {roc_auc_score(y, (1 - args.w) * standardize(lr_oof) + args.w * standardize(lgb_oof)):.7f}")
 if args.save:
-    XT = np.column_stack([lg(np.load(path(r, "test")).astype(float).ravel()) for _, r in members.iterrows()])
-    lt = LogisticRegression(C=args.C, max_iter=2000).fit(X, y).decision_function(XT)
-    gt = np.mean([lgb.train({**P, "seed": sd}, lgb.Dataset(X, y), int(np.mean(iters) * 1.1)).predict(XT, raw_score=True)
-                  for sd in range(args.lgb_seeds)], axis=0)
-    s = (1 - args.w) * z(lt) + args.w * z(gt)
+    test_logits = load_logits("test")
+    lr_test = LogisticRegression(C=args.C, max_iter=2000).fit(oof_logits, y).decision_function(test_logits)
+    n_trees = int(np.mean(best_iterations) * 1.1)
+    lgb_test = np.mean([lgb.train({**STACKER_LGB_PARAMS, "seed": seed}, lgb.Dataset(oof_logits, y), n_trees).predict(test_logits, raw_score=True)
+                        for seed in range(args.lgb_seeds)], axis=0)
+    score = (1 - args.w) * standardize(lr_test) + args.w * standardize(lgb_test)
     ids = pd.read_csv("data/test.csv", usecols=["id"])["id"]
-    pd.DataFrame({"id": ids, "satisfaction": 1 / (1 + np.exp(-s))}).to_csv(f"data/submission_{args.tag}.csv", index=False)
+    pd.DataFrame({"id": ids, "satisfaction": 1 / (1 + np.exp(-score))}).to_csv(f"data/submission_{args.tag}.csv", index=False)
     print(f"保存 data/submission_{args.tag}.csv")

@@ -14,23 +14,25 @@ import os
 import numpy as np
 import pandas as pd
 
-rows = pd.read_csv("src/9_public_oof_stacking/late_public_oof_sources.csv", dtype=str, keep_default_na=False)
+sources = pd.read_csv("src/9_public_oof_stacking/late_public_oof_sources.csv", dtype=str, keep_default_na=False)
 
 
-def read(path, key):
+def read_prediction(path, key):
     if path.endswith(".npy"):
         return np.load(path, allow_pickle=False).ravel()
     if path.endswith(".npz"):
         return np.load(path, allow_pickle=False)[key].ravel()
-    d = pd.read_parquet(path) if path.endswith(".parquet") else pd.read_csv(path)
-    d.columns = [str(c) for c in d.columns]
-    return d[key].values
+    table = pd.read_parquet(path) if path.endswith(".parquet") else pd.read_csv(path)
+    table.columns = [str(c) for c in table.columns]
+    return table[key].values
 
 
-for _, r in rows.iterrows():
-    src = f"data/pub_oof/raw_late/{r['notebook'].replace('/', '_')}"
-    out = f"data/{r['folder']}"
-    os.makedirs(out, exist_ok=True)
-    np.save(f"{out}/oof_{r['name']}.npy", read(f"{src}/{r['oof_file']}", r["oof_key"]).astype(np.float32))
-    np.save(f"{out}/test_{r['name']}.npy", read(f"{src}/{r['test_file']}", r["test_key"]).astype(np.float32))
-    print("保存", out, r["name"])
+for _, source in sources.iterrows():
+    notebook_dir = f"data/pub_oof/raw_late/{source['notebook'].replace('/', '_')}"
+    out_dir = f"data/{source['folder']}"
+    os.makedirs(out_dir, exist_ok=True)
+    oof = read_prediction(f"{notebook_dir}/{source['oof_file']}", source["oof_key"])
+    test = read_prediction(f"{notebook_dir}/{source['test_file']}", source["test_key"])
+    np.save(f"{out_dir}/oof_{source['name']}.npy", oof.astype(np.float32))
+    np.save(f"{out_dir}/test_{source['name']}.npy", test.astype(np.float32))
+    print("保存", out_dir, source["name"])

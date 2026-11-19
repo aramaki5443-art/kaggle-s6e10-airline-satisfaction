@@ -12,36 +12,38 @@ import json
 import os
 import re
 
-names = [os.path.basename(f)[4:-4] for d in ["data/pub_oof/cdeotte124", "data/pub_oof/extra"] for f in glob.glob(f"{d}/oof_*.npy")]
+names = [os.path.basename(f)[4:-4] for folder in ["data/pub_oof/cdeotte124", "data/pub_oof/extra"]
+         for f in glob.glob(f"{folder}/oof_*.npy")]
 names = [n for n in names if n != "nj_01"] + ["rmlp", "lgb", "cat", "xgb", "tabpfn"]  # 末尾5本は自分のモデル
-GL = {"a": "lgb", "b": "xgb", "c": "cat", "d": "other", "e": "mlp", "f": "other", "g": "other", "h": "lgb", "i": "xgb",
-      "j": "lgb", "k": "lgb", "l": "cat", "m": "lgb", "n": "mlp"}
+# dariushafshar氏のgl_a〜nの系統(manifest.csvの手法名から)
+GOLEM_FAMILY = {"a": "lgb", "b": "xgb", "c": "cat", "d": "other", "e": "mlp", "f": "other", "g": "other", "h": "lgb", "i": "xgb",
+                "j": "lgb", "k": "lgb", "l": "cat", "m": "lgb", "n": "mlp"}
 
 
-def fam(n):
-    m = re.fullmatch(r"gl_([a-n])", n)
-    if m:
-        return GL[m.group(1)]
-    l = n.lower()
-    if "tabpfn" in l or l.startswith("pfn_"):
+def model_family(name):
+    golem = re.fullmatch(r"gl_([a-n])", name)
+    if golem:
+        return GOLEM_FAMILY[golem.group(1)]
+    lower = name.lower()
+    if "tabpfn" in lower or lower.startswith("pfn_"):
         return "tabpfn"
-    if any(k in l for k in ["tabfm", "limix", "mitra", "kumo", "exaone", "causilo", "tabicl"]):
+    if any(k in lower for k in ["tabfm", "limix", "mitra", "kumo", "exaone", "causilo", "tabicl"]):
         return "tfm"
-    if any(k in l for k in ["realmlp", "rmlp", "mlp"]) or l.startswith("sadamt_e14_seed"):
+    if any(k in lower for k in ["realmlp", "rmlp", "mlp"]) or lower.startswith("sadamt_e14_seed"):
         return "mlp"
-    if "tabm" in l or "deepfm" in l:
+    if "tabm" in lower or "deepfm" in lower:
         return "other"
-    if re.search(r"(^|_)(cat|cb|catboost)", l):
+    if re.search(r"(^|_)(cat|cb|catboost)", lower):
         return "cat"
-    if "lgb" in l or "ghost" in l:
+    if "lgb" in lower or "ghost" in lower:
         return "lgb"
-    if "xgb" in l or "xgboost" in l:
+    if "xgb" in lower or "xgboost" in lower:
         return "xgb"
     return "other"
 
 
-F = {}
-for n in names:
-    F.setdefault(fam(n), []).append(n)
-json.dump(F, open("data/pub_oof/families.json", "w"), indent=1)
-print({k: len(v) for k, v in F.items()})
+members_by_family = {}
+for name in names:
+    members_by_family.setdefault(model_family(name), []).append(name)
+json.dump(members_by_family, open("data/pub_oof/families.json", "w"), indent=1)
+print({family: len(members) for family, members in members_by_family.items()})

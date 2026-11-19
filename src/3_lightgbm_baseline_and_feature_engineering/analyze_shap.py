@@ -32,78 +32,78 @@ ap.add_argument("--inter", type=int, default=3000, help="交互作用を計算�
 args = ap.parse_args()
 plt.rcParams["font.family"] = ["Yu Gothic", "Meiryo", "sans-serif"]  # 日本語の軸ラベル用(Windows)
 
-d = np.load(f"data/shap_lgb_{args.tag}.npz", allow_pickle=True)
-S, X, cols = d["shap"], d["X"], list(d["cols"])
+saved = np.load(f"data/shap_lgb_{args.tag}.npz", allow_pickle=True)
+shap_values, X, cols = saved["shap"], saved["X"], list(saved["cols"])
 out = f"data/shap/{args.tag}"
 os.makedirs(out, exist_ok=True)
-print(f"{len(S)}行・{len(cols)}列、fold0 va AUC {float(d['va_auc']):.5f}、木{int(d['iters'])}本")
+print(f"{len(shap_values)}行・{len(cols)}列、fold0 va AUC {float(saved['va_auc']):.5f}、木{int(saved['iters'])}本")
 # SHAPを全列足すと(基準値と合わせて)予測のlogitに一致するかの確認
-m = lgb.Booster(model_file=f"data/shap_lgb_{args.tag}.txt")
-Xs = pd.read_pickle(f"data/shap_lgb_{args.tag}_X.pkl")
-raw = m.predict(Xs, raw_score=True)
-print(f"検算: |基準値+SHAP合計−予測logit|の最大 {np.abs(d['base'] + S.sum(1) - raw).max():.2e}")
+model = lgb.Booster(model_file=f"data/shap_lgb_{args.tag}.txt")
+X_frame = pd.read_pickle(f"data/shap_lgb_{args.tag}_X.pkl")
+raw = model.predict(X_frame, raw_score=True)
+print(f"検算: |基準値+SHAP合計−予測logit|の最大 {np.abs(saved['base'] + shap_values.sum(1) - raw).max():.2e}")
 
-ma = np.abs(S).mean(0)
-gain, split = d["gain"].astype(float), d["split"].astype(float)
-def dir_corr(j):
-    ok = ~np.isnan(X[:, j])  # 条件付きの列(ビジネスクラスだけ等)は対象外の行が欠損なので除く
-    return spearmanr(X[ok, j], S[ok, j])[0] if ok.sum() > 10 and np.std(X[ok, j]) > 0 else np.nan
-dirc = [dir_corr(j) for j in range(len(cols))]
-t = pd.DataFrame({"列": cols, "平均|SHAP|": ma, "SHAP割合%": 100 * ma / ma.sum(), "gain割合%": 100 * gain / gain.sum(),
-                  "分岐割合%": 100 * split / split.sum(), "値とSHAPの順位相関": dirc})
+mean_abs_shap = np.abs(shap_values).mean(0)
+gain, split = saved["gain"].astype(float), saved["split"].astype(float)
+def shap_value_direction(j):
+    has_value = ~np.isnan(X[:, j])  # 条件付きの列(ビジネスクラスだけ等)は対象外の行が欠損なので除く
+    return spearmanr(X[has_value, j], shap_values[has_value, j])[0] if has_value.sum() > 10 and np.std(X[has_value, j]) > 0 else np.nan
+directions = [shap_value_direction(j) for j in range(len(cols))]
+importance = pd.DataFrame({"列": cols, "平均|SHAP|": mean_abs_shap, "SHAP割合%": 100 * mean_abs_shap / mean_abs_shap.sum(), "gain割合%": 100 * gain / gain.sum(),
+                           "分岐割合%": 100 * split / split.sum(), "値とSHAPの順位相関": directions})
 for c in ["平均|SHAP|", "gain割合%", "分岐割合%"]:
-    t[c.replace("割合%", "") + "順位"] = t[c].rank(ascending=False).astype(int)
-t = t.sort_values("平均|SHAP|", ascending=False).reset_index(drop=True)
-t.to_csv(f"{out}/importance.csv", index=False, encoding="utf-8-sig")
+    importance[c.replace("割合%", "") + "順位"] = importance[c].rank(ascending=False).astype(int)
+importance = importance.sort_values("平均|SHAP|", ascending=False).reset_index(drop=True)
+importance.to_csv(f"{out}/importance.csv", index=False, encoding="utf-8-sig")
 pd.set_option("display.width", 250)
-print(t.round(4).to_string())
+print(importance.round(4).to_string())
 
 # ① 棒グラフ
-o = np.argsort(ma)
+order = np.argsort(mean_abs_shap)
 fig, ax = plt.subplots(figsize=(8, 0.28 * len(cols) + 1))
-ax.barh(np.array(cols)[o], ma[o])
+ax.barh(np.array(cols)[order], mean_abs_shap[order])
 ax.set_xlabel("平均|SHAP|(logit、大きいほど予測を大きく動かす列)")
 ax.set_title("列ごとの寄与の大きさ(自分のLightGBM、fold0の検証行)")
 fig.tight_layout(); fig.savefig(f"{out}/1_bar.png", dpi=110); plt.close(fig)
 # ② beeswarm
-shap.summary_plot(S, X, feature_names=cols, show=False, max_display=len(cols))
+shap.summary_plot(shap_values, X, feature_names=cols, show=False, max_display=len(cols))
 plt.xlabel("SHAP(右=満足の方向に押す、左=不満の方向に押す)")
 plt.gcf().savefig(f"{out}/2_beeswarm.png", dpi=110, bbox_inches="tight"); plt.close("all")
 
 # ④ 交互作用(2列の組み合わせ効果)
 if args.inter:
-    n = min(args.inter, len(Xs))
-    Xn = Xs.iloc[:n].copy()
-    for c in Xn.columns[Xn.dtypes == "category"]:
-        Xn[c] = Xn[c].cat.codes.astype(float)  # LightGBMは内部でカテゴリ番号を使うので番号で渡せば同じ予測になる
-    Xn = Xn.astype(float)
-    print(f"番号で渡したときの予測の一致: 最大差 {np.abs(m.predict(Xn.values, raw_score=True) - raw[:n]).max():.2e}")
-    I = shap.TreeExplainer(m).shap_interaction_values(Xn.values)
-    I = I[1] if isinstance(I, list) else I
-    A = np.abs(I).mean(0)
-    np.fill_diagonal(A, 0)
-    pairs = sorted(((A[i, j] * 2, cols[i], cols[j]) for i in range(len(cols)) for j in range(i + 1, len(cols))), reverse=True)
+    n_rows = min(args.inter, len(X_frame))
+    X_numeric = X_frame.iloc[:n_rows].copy()
+    for c in X_numeric.columns[X_numeric.dtypes == "category"]:
+        X_numeric[c] = X_numeric[c].cat.codes.astype(float)  # LightGBMは内部でカテゴリ番号を使うので番号で渡せば同じ予測になる
+    X_numeric = X_numeric.astype(float)
+    print(f"番号で渡したときの予測の一致: 最大差 {np.abs(model.predict(X_numeric.values, raw_score=True) - raw[:n_rows]).max():.2e}")
+    interaction = shap.TreeExplainer(model).shap_interaction_values(X_numeric.values)
+    interaction = interaction[1] if isinstance(interaction, list) else interaction
+    mean_abs_interaction = np.abs(interaction).mean(0)
+    np.fill_diagonal(mean_abs_interaction, 0)
+    pairs = sorted(((mean_abs_interaction[i, j] * 2, cols[i], cols[j]) for i in range(len(cols)) for j in range(i + 1, len(cols))), reverse=True)
     pd.DataFrame(pairs[:30], columns=["組み合わせ効果の大きさ(平均|交互作用|×2)", "列A", "列B"]).to_csv(
         f"{out}/interactions.csv", index=False, encoding="utf-8-sig")
     print("\n組み合わせ効果の上位15ペア(平均|SHAP交互作用|×2、logit):")
     for v, a, b in pairs[:15]:
         print(f"  {v:.4f}  {a} × {b}")
-    print(f"  (参考)主効果の合計に対する交互作用の合計の比率: {A.sum() / np.abs(np.einsum('nii->ni', I)).mean(0).sum():.3f}")
+    print(f"  (参考)主効果の合計に対する交互作用の合計の比率: {mean_abs_interaction.sum() / np.abs(np.einsum('nii->ni', interaction)).mean(0).sum():.3f}")
 
 # ③ 依存図: 上位6列+到着遅延
-top = list(t["列"][:6]) + [c for c in cols if "Delay" in c and c not in list(t["列"][:6])]
-fig, axes = plt.subplots((len(top) + 2) // 3, 3, figsize=(15, 4.2 * ((len(top) + 2) // 3)))
-for ax, c in zip(axes.ravel(), top):
+plot_cols = list(importance["列"][:6]) + [c for c in cols if "Delay" in c and c not in list(importance["列"][:6])]
+fig, axes = plt.subplots((len(plot_cols) + 2) // 3, 3, figsize=(15, 4.2 * ((len(plot_cols) + 2) // 3)))
+for ax, c in zip(axes.ravel(), plot_cols):
     j = cols.index(c)
-    k = shap.utils.approximate_interactions(j, S, X)[0]  # 色に使う相手(組み合わせ効果が強そうな列)
-    sc = ax.scatter(X[:, j], S[:, j], c=X[:, k], s=3, cmap="coolwarm", alpha=0.6)
+    color_j = shap.utils.approximate_interactions(j, shap_values, X)[0]  # 色に使う相手(組み合わせ効果が強そうな列)
+    points = ax.scatter(X[:, j], shap_values[:, j], c=X[:, color_j], s=3, cmap="coolwarm", alpha=0.6)
     ax.axhline(0, color="gray", lw=0.5)
     ax.set_xlabel(c); ax.set_ylabel("SHAP")
-    ax.set_title(f"{c}(色={cols[k]})", fontsize=9)
+    ax.set_title(f"{c}(色={cols[color_j]})", fontsize=9)
     if "Delay" in c or c == "Flight Distance":
         ax.set_xscale("symlog")
-    fig.colorbar(sc, ax=ax)
-for ax in axes.ravel()[len(top):]:
+    fig.colorbar(points, ax=ax)
+for ax in axes.ravel()[len(plot_cols):]:
     ax.axis("off")
 fig.suptitle("依存図: 横軸=列の値、縦軸=SHAP(上=満足の方向)、色=組み合わせ効果が強い相手の列の値")
 fig.tight_layout(); fig.savefig(f"{out}/3_dependence.png", dpi=100); plt.close(fig)

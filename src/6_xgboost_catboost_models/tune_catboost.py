@@ -28,69 +28,69 @@ from catboost import CatBoostClassifier
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold
 
-N_TRIALS, LIMIT_H = 30, 10.8
-TE = {"te_distance_m3": ("Flight Distance", 3), "te_dist_class": (["Flight Distance", "Class"], 3)}
-RAW_N = 20  # 先頭20列が元の特徴量(feature_definitions.pyのBASE)
-T0 = time.time()
+N_TRIALS, LIMIT_HOURS = 30, 10.8
+TARGET_ENCODING_SPECS = {"te_distance_m3": ("Flight Distance", 3), "te_dist_class": (["Flight Distance", "Class"], 3)}
+N_BASE_FEATURES = 20  # 先頭20列が元の特徴量(feature_definitions.pyのBASE_FEATURES)
+START_TIME = time.time()
 os.makedirs("optuna_cat", exist_ok=True)
 
-hit = glob.glob("/kaggle/input/**/fe36_train.csv", recursive=True)
-d = os.path.dirname(hit[0]) if hit else "data"  # Kaggleではデータセット、手元ではdata/(GPUが要る)
-X = pd.read_csv(f"{d}/fe36_train.csv")
+kaggle_files = glob.glob("/kaggle/input/**/fe36_train.csv", recursive=True)
+data_dir = os.path.dirname(kaggle_files[0]) if kaggle_files else "data"  # Kaggleではデータセット、手元ではdata/(GPUが要る)
+X = pd.read_csv(f"{data_dir}/fe36_train.csv")
 y = X.pop("satisfaction").values
 X = X.drop(columns="id")
-raw = list(X.columns[:RAW_N])
-X = X.assign(**{c: X[c].fillna(-1).astype(str) for c in raw})  # 全列カテゴリ化(train_catboost.pyのallcatと同一)
+base_cols = list(X.columns[:N_BASE_FEATURES])
+X = X.assign(**{c: X[c].fillna(-1).astype(str) for c in base_cols})  # 全列カテゴリ化(train_catboost.pyのallcatと同一)
 
 
-def te_map(key_fit, y_fit, key_apply, m):  # feature_definitions.pyと同一
-    p = y_fit.mean()
-    g = pd.DataFrame({"k": key_fit, "y": y_fit}).groupby("k")["y"].agg(["sum", "count"])
-    return pd.Series(key_apply).map((g["sum"] + m * p) / (g["count"] + m)).fillna(p).values
+def target_encode(key_fit, y_fit, key_apply, model):  # feature_definitions.pyと同一
+    prior = y_fit.mean()
+    stats = pd.DataFrame({"key": key_fit, "y": y_fit}).groupby("key")["y"].agg(["sum", "count"])
+    return pd.Series(key_apply).map((stats["sum"] + model * prior) / (stats["count"] + model)).fillna(prior).values
 
 
-def te_fold(Xtr, ytr, others, seed):  # feature_definitions.pyと同一
-    Xtr = Xtr.copy(); others = [o.copy() for o in others]
-    for name, (_, m) in TE.items():
-        key = Xtr[name].values; v = np.zeros(len(Xtr))
-        for itr, iva in StratifiedKFold(5, shuffle=True, random_state=seed).split(key, ytr):
-            v[iva] = te_map(key[itr], ytr[itr], key[iva], m)
-        for o in others:
-            o[name] = te_map(key, ytr, o[name].values, m)
-        Xtr[name] = v
-    return Xtr, others
+def target_encode_in_folds(X_fit, y_fit, others, seed):  # feature_definitions.pyと同一
+    X_fit = X_fit.copy(); others = [other.copy() for other in others]
+    for name, (_, model) in TARGET_ENCODING_SPECS.items():
+        key = X_fit[name].values; encoded = np.zeros(len(X_fit))
+        for inner_fit, inner_apply in StratifiedKFold(5, shuffle=True, random_state=seed).split(key, y_fit):
+            encoded[inner_apply] = target_encode(key[inner_fit], y_fit[inner_fit], key[inner_apply], model)
+        for other in others:
+            other[name] = target_encode(key, y_fit, other[name].values, model)
+        X_fit[name] = encoded
+    return X_fit, others
 
 
 folds = []
-for k, (tr, va) in enumerate(StratifiedKFold(5, shuffle=True, random_state=42).split(X, y)):
-    Xtr, (Xva,) = te_fold(X.iloc[tr], y[tr], [X.iloc[va]], seed=k)
-    folds.append((Xtr, y[tr], Xva, va))
-BASE = dict(iterations=20000, learning_rate=0.05, eval_metric="AUC", random_seed=42, task_type="GPU",
-            od_type="Iter", od_wait=100, use_best_model=True, verbose=0)
+for k, (train_rows, valid_rows) in enumerate(StratifiedKFold(5, shuffle=True, random_state=42).split(X, y)):
+    X_fit, (X_valid,) = target_encode_in_folds(X.iloc[train_rows], y[train_rows], [X.iloc[valid_rows]], seed=k)
+    folds.append((X_fit, y[train_rows], X_valid, valid_rows))
+FIXED_PARAMS = dict(iterations=20000, learning_rate=0.05, eval_metric="AUC", random_seed=42, task_type="GPU",
+                    od_type="Iter", od_wait=100, use_best_model=True, verbose=0)
 
 
 def objective(trial):
-    p = dict(depth=trial.suggest_int("depth", 4, 10),
-             l2_leaf_reg=trial.suggest_float("l2_leaf_reg", 1, 30, log=True),
-             border_count=trial.suggest_categorical("border_count", [32, 64, 128, 254]),
-             random_strength=trial.suggest_float("random_strength", 0.1, 10, log=True),
-             bagging_temperature=trial.suggest_float("bagging_temperature", 0.0, 1.0),
-             max_ctr_complexity=trial.suggest_int("max_ctr_complexity", 1, 4))
-    oof = np.zeros(len(y)); aucs, iters = [], []; t0 = time.time()
-    for k, (Xtr, ytr, Xva, va) in enumerate(folds):
-        m = CatBoostClassifier(**BASE, **p, cat_features=raw)
-        m.fit(Xtr, ytr, eval_set=(Xva, y[va]))
-        oof[va] = m.predict_proba(Xva)[:, 1]
-        aucs.append(roc_auc_score(y[va], oof[va])); iters.append(int(m.get_best_iteration()))
+    params = dict(depth=trial.suggest_int("depth", 4, 10),
+                  l2_leaf_reg=trial.suggest_float("l2_leaf_reg", 1, 30, log=True),
+                  border_count=trial.suggest_categorical("border_count", [32, 64, 128, 254]),
+                  random_strength=trial.suggest_float("random_strength", 0.1, 10, log=True),
+                  bagging_temperature=trial.suggest_float("bagging_temperature", 0.0, 1.0),
+                  max_ctr_complexity=trial.suggest_int("max_ctr_complexity", 1, 4))
+    oof = np.zeros(len(y)); aucs, best_iterations = [], []; start_time = time.time()
+    for k, (X_fit, y_fit, X_valid, valid_rows) in enumerate(folds):
+        model = CatBoostClassifier(**FIXED_PARAMS, **params, cat_features=base_cols)
+        model.fit(X_fit, y_fit, eval_set=(X_valid, y[valid_rows]))
+        oof[valid_rows] = model.predict_proba(X_valid)[:, 1]
+        aucs.append(roc_auc_score(y[valid_rows], oof[valid_rows])); best_iterations.append(int(model.get_best_iteration()))
         trial.report(float(np.mean(aucs)), k)
         if trial.should_prune():
-            print(f"#{trial.number} 打ち切り fold{k} 平均{np.mean(aucs):.6f} {time.time() - t0:.0f}s {p}", flush=True)
+            print(f"#{trial.number} 打ち切り fold{k} 平均{np.mean(aucs):.6f} {time.time() - start_time:.0f}s {params}", flush=True)
             raise optuna.TrialPruned()
     auc = roc_auc_score(y, oof)
     np.save(f"optuna_cat/oof_t{trial.number}.npy", oof)
-    r = {"trial": trial.number, "oof": auc, "params": p, "va_folds": aucs, "iters": iters, "sec": round(time.time() - t0)}
-    open("optuna_cat/results.jsonl", "a").write(json.dumps(r) + "\n")
-    print(f"#{trial.number} OOF {auc:.6f} iters {iters} {time.time() - t0:.0f}s {p}", flush=True)
+    result = {"trial": trial.number, "oof": auc, "params": params, "va_folds": aucs, "iters": best_iterations, "sec": round(time.time() - start_time)}
+    open("optuna_cat/results.jsonl", "a").write(json.dumps(result) + "\n")
+    print(f"#{trial.number} OOF {auc:.6f} iters {best_iterations} {time.time() - start_time:.0f}s {params}", flush=True)
     return auc
 
 
@@ -99,6 +99,6 @@ study = optuna.create_study(study_name="cat_allcat_v1", storage="sqlite:///optun
                             load_if_exists=True, sampler=optuna.samplers.TPESampler(seed=42),
                             pruner=optuna.pruners.MedianPruner(n_startup_trials=6, n_warmup_steps=1))
 study.enqueue_trial(dict(depth=6, l2_leaf_reg=3.0, border_count=128, random_strength=1.0, bagging_temperature=1.0, max_ctr_complexity=4))
-study.optimize(objective, n_trials=N_TRIALS, timeout=LIMIT_H * 3600 - (time.time() - T0))
+study.optimize(objective, n_trials=N_TRIALS, timeout=LIMIT_HOURS * 3600 - (time.time() - START_TIME))
 for t in sorted([t for t in study.trials if t.value is not None], key=lambda t: -t.value)[:5]:
     print(f"上位 #{t.number} OOF {t.value:.6f} {t.params} iters {t.user_attrs.get('iters')}")

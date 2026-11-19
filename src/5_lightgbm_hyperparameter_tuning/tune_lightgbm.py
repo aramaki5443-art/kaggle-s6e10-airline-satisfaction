@@ -4,7 +4,7 @@
   葉の最少人数も増やす)を見逃すため、8つを同時に探す。
 ひとことで言うと: 過去の試行の結果から「次はこのあたりが良さそう」と推測しながら、値の組み合わせを50通りほど試す。
 やり方:
-  - 特徴量は採用済みの36列(feature_definitions.pyのADOPTED)で固定。fold分割はseed42の5fold。学習率は0.05に固定し、
+  - 特徴量は採用済みの36列(feature_definitions.pyのADOPTED_FEATURES)で固定。fold分割はseed42の5fold。学習率は0.05に固定し、
     木の本数は検証foldでの早期停止(100本)で決める(train_lightgbm.pyと同じ。学習率は最後に下げる)。
   - 物差しは5foldのOOF AUC。1回目の試行は既定に近い設定(正則化0の代わりに1e-3、OOF 0.960493。完全な既定は0.960458)。
   - TEの列はfoldごとに1回だけ計算して使い回す(試行ごとに同じ値になるため)。
@@ -15,7 +15,7 @@
   max_bin 511・subsample 0.90・colsample 0.51)が3seed平均+0.000319。学習率0.02で+0.000388(0.01は0.02と見分けられず)。
 """
 import argparse
-import json
+import sys
 import time
 
 import lightgbm as lgb
@@ -25,10 +25,9 @@ import pandas as pd
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold
 
-# feature_definitions.pyの特徴量の定義(関数・ADOPTED・TE)を読み込む
-src = open("src/3_lightgbm_baseline_and_feature_engineering/feature_definitions.py", encoding="utf-8").read()
-g = {"__name__": "fe_defs"}
-exec(compile(src, "feature_definitions.py", "exec"), g)
+# 特徴量の定義を読み込む(フォルダ名が数字で始まりパッケージにできないため、そのフォルダを検索パスに足す)
+sys.path.insert(0, "src/3_lightgbm_baseline_and_feature_engineering")
+import feature_definitions as features  # noqa: E402
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--n-trials", type=int, default=50)
@@ -36,46 +35,46 @@ ap.add_argument("--study", default="lgb_c33_v1")
 args = ap.parse_args()
 
 # データの置き場所・列名・foldの分け方(リポジトリのルートで実行する前提)
-cfg = {"train_csv": "data/train.csv", "test_csv": "data/test.csv", "id_col": "id", "target_col": "satisfaction",
-       "cv": {"n_splits": 5, "seed": 42}}
-train = pd.read_csv(cfg["train_csv"])
-y = train[cfg["target_col"]].astype(int).values
-X = pd.concat([train[g["BASE"]]] + [g["FE"][a](train) for a in g["ADOPTED"]], axis=1)
-for c in g["CAT"]:
+config = {"train_csv": "data/train.csv", "test_csv": "data/test.csv", "id_col": "id", "target_col": "satisfaction",
+          "cv": {"n_splits": 5, "seed": 42}}
+train = pd.read_csv(config["train_csv"])
+y = train[config["target_col"]].astype(int).values
+X = pd.concat([train[features.BASE_FEATURES]] + [features.FEATURE_BUILDERS[a](train) for a in features.ADOPTED_FEATURES], axis=1)
+for c in features.CATEGORICAL_COLUMNS:
     X[c] = X[c].astype("category")
 print(f"{X.shape[1]}列", flush=True)
 folds = []
-for k, (tr, va) in enumerate(StratifiedKFold(cfg["cv"]["n_splits"], shuffle=True, random_state=cfg["cv"]["seed"]).split(X, y)):
-    Xtr, (Xva,) = g["te_fold"](X.iloc[tr], y[tr], [X.iloc[va]], seed=k)  # feature_definitions.pyと同じTE
-    folds.append((Xtr, y[tr], Xva, va))
+for k, (train_rows, valid_rows) in enumerate(StratifiedKFold(config["cv"]["n_splits"], shuffle=True, random_state=config["cv"]["seed"]).split(X, y)):
+    X_fit, (X_valid,) = features.target_encode_in_folds(X.iloc[train_rows], y[train_rows], [X.iloc[valid_rows]], seed=k)  # feature_definitions.pyと同じTE
+    folds.append((X_fit, y[train_rows], X_valid, valid_rows))
 
-BASE = dict(objective="binary", learning_rate=0.05, n_estimators=10000, random_state=42, verbose=-1)
-DEFAULT = dict(num_leaves=31, min_child_samples=20, reg_lambda=1e-3, reg_alpha=1e-3, min_split_gain=0.0, max_bin=255,
-               subsample=1.0, colsample_bytree=1.0)  # 既定設定(正則化0の代わりに範囲の下限1e-3)
+FIXED_PARAMS = dict(objective="binary", learning_rate=0.05, n_estimators=10000, random_state=42, verbose=-1)
+DEFAULT_PARAMS = dict(num_leaves=31, min_child_samples=20, reg_lambda=1e-3, reg_alpha=1e-3, min_split_gain=0.0, max_bin=255,
+                      subsample=1.0, colsample_bytree=1.0)  # 既定設定(正則化0の代わりに範囲の下限1e-3)
 
 
 def objective(trial):
-    p = dict(num_leaves=trial.suggest_int("num_leaves", 15, 255, log=True),
-             min_child_samples=trial.suggest_int("min_child_samples", 5, 500, log=True),
-             reg_lambda=trial.suggest_float("reg_lambda", 1e-3, 100, log=True),  # lambda_l2
-             reg_alpha=trial.suggest_float("reg_alpha", 1e-3, 10, log=True),  # lambda_l1
-             min_split_gain=trial.suggest_float("min_split_gain", 0.0, 0.5),
-             max_bin=trial.suggest_categorical("max_bin", [63, 127, 255, 511, 1023]),
-             subsample=trial.suggest_float("subsample", 0.5, 1.0),  # bagging_fraction(行の間引き)
-             colsample_bytree=trial.suggest_float("colsample_bytree", 0.3, 1.0))  # feature_fraction(列の間引き)
-    oof = np.zeros(len(y)); aucs, iters = [], []; t0 = time.time()
-    for k, (Xtr, ytr, Xva, va) in enumerate(folds):
-        m = lgb.LGBMClassifier(**BASE, **p, subsample_freq=1)
-        m.fit(Xtr, ytr, eval_set=[(Xva, y[va])], eval_metric="auc", callbacks=[lgb.early_stopping(100, verbose=False)])
-        oof[va] = m.predict_proba(Xva)[:, 1]
-        aucs.append(roc_auc_score(y[va], oof[va])); iters.append(m.best_iteration_)
+    params = dict(num_leaves=trial.suggest_int("num_leaves", 15, 255, log=True),
+                  min_child_samples=trial.suggest_int("min_child_samples", 5, 500, log=True),
+                  reg_lambda=trial.suggest_float("reg_lambda", 1e-3, 100, log=True),  # lambda_l2
+                  reg_alpha=trial.suggest_float("reg_alpha", 1e-3, 10, log=True),  # lambda_l1
+                  min_split_gain=trial.suggest_float("min_split_gain", 0.0, 0.5),
+                  max_bin=trial.suggest_categorical("max_bin", [63, 127, 255, 511, 1023]),
+                  subsample=trial.suggest_float("subsample", 0.5, 1.0),  # bagging_fraction(行の間引き)
+                  colsample_bytree=trial.suggest_float("colsample_bytree", 0.3, 1.0))  # feature_fraction(列の間引き)
+    oof = np.zeros(len(y)); aucs, best_iterations = [], []; start_time = time.time()
+    for k, (X_fit, y_fit, X_valid, valid_rows) in enumerate(folds):
+        model = lgb.LGBMClassifier(**FIXED_PARAMS, **params, subsample_freq=1)
+        model.fit(X_fit, y_fit, eval_set=[(X_valid, y[valid_rows])], eval_metric="auc", callbacks=[lgb.early_stopping(100, verbose=False)])
+        oof[valid_rows] = model.predict_proba(X_valid)[:, 1]
+        aucs.append(roc_auc_score(y[valid_rows], oof[valid_rows])); best_iterations.append(model.best_iteration_)
         trial.report(float(np.mean(aucs)), k)
         if trial.should_prune():
-            print(f"#{trial.number} 打ち切り fold{k} 平均{np.mean(aucs):.6f} {p}", flush=True)
+            print(f"#{trial.number} 打ち切り fold{k} 平均{np.mean(aucs):.6f} {params}", flush=True)
             raise optuna.TrialPruned()
     auc = roc_auc_score(y, oof)
-    trial.set_user_attr("iters", iters); trial.set_user_attr("va_folds", aucs); trial.set_user_attr("sec", round(time.time() - t0))
-    print(f"#{trial.number} OOF {auc:.6f} iters {iters} {time.time() - t0:.0f}s {p}", flush=True)
+    trial.set_user_attr("iters", best_iterations); trial.set_user_attr("va_folds", aucs); trial.set_user_attr("sec", round(time.time() - start_time))
+    print(f"#{trial.number} OOF {auc:.6f} iters {best_iterations} {time.time() - start_time:.0f}s {params}", flush=True)
     return auc
 
 
@@ -83,9 +82,9 @@ study = optuna.create_study(study_name=args.study, storage="sqlite:///data/optun
                             sampler=optuna.samplers.TPESampler(seed=42),
                             pruner=optuna.pruners.MedianPruner(n_startup_trials=8, n_warmup_steps=1))
 if len(study.trials) == 0:
-    study.enqueue_trial(DEFAULT)
+    study.enqueue_trial(DEFAULT_PARAMS)
 done = len([t for t in study.trials if t.state.is_finished()])
 study.optimize(objective, n_trials=max(0, args.n_trials - done))
-top = sorted([t for t in study.trials if t.value is not None], key=lambda t: -t.value)[:5]
-for t in top:
+best_trials = sorted([t for t in study.trials if t.value is not None], key=lambda t: -t.value)[:5]
+for t in best_trials:
     print(f"上位 #{t.number} OOF {t.value:.6f} {t.params} iters {t.user_attrs.get('iters')}")
