@@ -445,9 +445,11 @@ src/
 | モデル(自分で実装) | LightGBM、XGBoost、CatBoost |
 | モデル(公開ノートブックの再現。コードは含めない) | RealMLP(pytabkit)、TabPFN |
 | ハイパラ調整 | Optuna |
-| 分析・可視化 | pandas、NumPy、scikit-learn、SHAP、matplotlib、seaborn、Jupyter |
+| 分析・可視化 | pandas、NumPy、SciPy、scikit-learn、SHAP、matplotlib、seaborn、Jupyter |
 | 実行環境 | 手元のPC(Windows、CPU): LightGBM・XGBoost・スタッキング / KaggleのGPU: CatBoost・RealMLP・TabPFN |
 | 開発環境 | Claude Code(AIコーディングアシスタント。使い方は「開発について」) |
+
+主なライブラリの版(手元): LightGBM 4.7.0、XGBoost 3.4.1、CatBoost 1.2.10、Optuna 5.0.0、scikit-learn 1.9.0、pandas 3.0.5、NumPy 2.5.2。KaggleのTabPFNは`tabpfn==9.0.0`。すべての版は`uv.lock`で固定している。
 
 ## 再現手順
 
