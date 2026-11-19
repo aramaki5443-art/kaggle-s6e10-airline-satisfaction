@@ -417,6 +417,7 @@ flowchart LR
 ## フォルダ構成
 
 ```
+README.md、pyproject.toml・uv.lock(ライブラリと版)、.python-version(Pythonの版)
 src/
 ├─ 1_exploratory_data_analysis/
 │    EDA.ipynb
