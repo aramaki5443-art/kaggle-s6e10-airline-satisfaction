@@ -1,13 +1,13 @@
-"""XGBoostをLightGBMと同じ特徴量で学習し、ブレンドに足す価値があるかを診断する。
+"""XGBoostをLightGBMと同じ特徴量で学習し、OOFとtestの予測を保存する。
 
 目的: 調整後のLightGBM+RealMLPのブレンドに、3つ目のモデルとしてXGBoostを足すと伸びるかを、特徴量選びに時間をかける前に確かめる。
-ひとことで言うと: 「同じ材料(36列)で別の料理人(XGBoost)に作らせたら、今の2人と違う味になるか」を1回だけ試す。
+ひとことで言うと: LightGBMと同じ36列をXGBoostに学習させ、LightGBM・RealMLPと違う予測になるかを見る。
 やり方:
   - 特徴量はfeature_definitions.pyのADOPTED_FEATURES(36列)とTEをそのまま使う(定義・TEの計算はfeature_definitions.pyと同一)。
-  - ハイパラはXGBoostの既定(max_depth 6等)。ただし学習率だけ既定の0.3を0.05にし、木の本数は検証foldでの早期停止(100本)で
+  - ハイパラは、--tunedを付けると6のハイパラ調整で採用した設定(TUNED_PARAMS)、付けなければXGBoostの既定(max_depth 6等)。ただし学習率だけ既定の0.3を0.05にし、木の本数は検証foldでの早期停止(100本)で
     決める(LightGBMの判定と同じ条件。0.3だと1本ごとの変化が大きく、判定がぶれやすいため)。
-  - fold分割はseed42の5fold(--cv-seedで変更可)。OOFをdata/oof_xgb_<tag>.npyに保存し、ブレンドの診断は別に行う。
-  - --predictで各foldのモデルでtestを予測して平均し、data/test_xgb_<tag>.npyに保存する(アンサンブル用、train_lightgbm.pyと同じやり方)。
+  - fold分割はseed42の5fold(--cv-seedで変更可)。OOFをdata/oof_xgb_<save-name>_cv<seed>.npyに保存し、ブレンドの診断は別に行う。
+  - --predictで各foldのモデルでtestを予測して平均し、data/test_xgb_<save-name>_cv<seed>.npyに保存する(アンサンブル用、train_lightgbm.pyと同じやり方)。
 なぜ: GBDT同士は予測が似やすく(前コンペでGBDT3種の相関0.998以上)、単体が良くてもブレンドが伸びないことがある。
 """
 import argparse

@@ -2,10 +2,10 @@
 
 目的: 最初に集めたデータセットとは別に、コンペの後半に公開されたノートブックの出力から11本をスタックに足した。
   ファイルの形(csvの列・npzのキー・parquetの列)がノートブックごとに違うので、late_public_oof_extraction.csvに取り出し方を書いておき、
-  data/<folder>/oof_<name>.npy・test_<name>.npy(train.csv・test.csvと同じ行の順)に保存する。
+  data/<data_subfolder>/oof_<member_name>.npy・test_<member_name>.npy(train.csv・test.csvと同じ行の順)に保存する。
 ひとことで言うと: よそのノートブックの出力から、使った予測の列だけを同じ書式で書き写す。
 やり方:
-  - ノートブックの出力は `kaggle kernels output <notebook> -p data/pub_oof/raw_late/<owner>_<slug>` で取得しておく。
+  - ノートブックの出力は `kaggle kernels output <kaggle_notebook> -p data/pub_oof/raw_late/<所有者>_<ノートブック名>` で取得しておく。
   - npyはそのまま、npzは配列名、csv・parquetは列名(oof_column・test_columnに書いた名前。parquetの列名は数字の文字列)を読む。
 使い方: python src/9_public_oof_stacking/extract_late_public_oof.py
 """

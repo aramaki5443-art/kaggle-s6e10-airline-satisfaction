@@ -1,8 +1,7 @@
 """最終提出のスタック: 自分のモデル4本+公開OOF 222本(計226本)を2段目で混ぜ、提出ファイルを作る。
 
 目的: 9の「公開OOFの導入」で決めた最終構成を、メンバーの一覧(final_stack_members.csv)から作り直す。
-ひとことで言うと: 226本の予測を「重み付きの足し算」でまとめる係(ロジスティック回帰)に、
-  「この予測とこの予測が割れたら…」と条件で使い分ける係(浅いLightGBM)の意見を2割だけ足す。
+ひとことで言うと: 226本の予測をロジスティック回帰(重み付きの足し算)で混ぜ、条件で使い分けられる浅いLightGBMの予測を2割だけ足す。
 やり方:
   - メンバーはfinal_stack_members.csvの順に読む(data_subfolder=ownは data/oof_<member_name>.npy、それ以外は data/<data_subfolder>/oof_<member_name>.npy。
     testは同じ場所の test_<member_name>.npy)。各予測をlogit=log(p/(1-p))にして並べる。

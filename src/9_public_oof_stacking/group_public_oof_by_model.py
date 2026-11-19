@@ -1,7 +1,7 @@
 """スタックのメンバー(公開OOF+自分の5本)を名前から系統(TFM・TabPFN・NN・CatBoost・LightGBM・XGBoost・その他)に分ける。
 
 目的: 系統ごとに外したときの寄与や、系統ごとの正則化(family-wise L2)で使う「どのメンバーがどの系統か」の表を作る。
-ひとことで言うと: 264人の専門家を「出身の流派」ごとに名簿に分ける。
+ひとことで言うと: スタックのメンバーを、名前からモデルの種類(系統)ごとに分けた一覧を作る。
 やり方: ファイル名のキーワード(tabpfn・tabfm・realmlp・cat・lgb・xgb等)で判定する。dariushafshar氏のgl_a〜nは
   manifest.csv(公開データセットの説明)の手法名で割り当てる。sadamt_e14_seed*はRealMLPのseed違い。
   結果をdata/pub_oof/families.jsonに保存する(系統名→メンバー名の一覧)。

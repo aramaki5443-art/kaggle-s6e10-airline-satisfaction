@@ -2,7 +2,7 @@
 
 目的: 参加者ごとにファイルの形(npy/csv、float32/64、名前の付け方)が違う公開OOFを、make_final_submission.pyで読める形
   (oof_<名前>.npy・test_<名前>.npy、train.csv・test.csvと同じ行の順)にそろえる。
-ひとことで言うと: よそから集めた「味見の記録」を同じ書式の帳面に写し、同じ記録の写しが二重に入らないようにする。
+ひとことで言うと: 形式の違う公開OOFを同じ形式のファイルに書き直し、同じ予測の写しが二重に入らないようにする。
 やり方:
   - 入力: data/pub_oof/raw/<データセット名>/ の中の oof_*.npy と同名の test_*.npy の組、または --named-pair で指定した
     「名前=OOF=test」の組(npyまたはcsv)。

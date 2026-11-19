@@ -1,6 +1,6 @@
 """CatBoostをKaggleのGPUで学習し、OOFとtestの予測を保存する。
 
-目的: RealMLP+LightGBMのアンサンブルに、3つ目の木のモデルとしてCatBoostを足す価値があるかを調べる。
+目的: RealMLP+LightGBM(+XGBoost)のアンサンブルに、木のモデルとしてCatBoostを足す価値があるかを調べる。
 ひとことで言うと: LightGBMと同じ36列を、カテゴリ列の扱い方が違うCatBoostに学習させ、違う予測になるかを見る。
 やり方:
   - 特徴量はfeature_definitions.pyの採用済みの列(`python src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --feature none --export-fe`でdata/fe36_*.csvに書き出す。

@@ -1,7 +1,7 @@
 """試したが採用しなかった特徴量の候補(約90個)。採否の判定の記録として残す。
 
 目的: 採用した特徴量(feature_definitions.py)と分けて置き、本体を短く読みやすくする。どれを試したかの証拠でもある。
-ひとことで言うと: 「試作したが使わなかった下ごしらえ」の手順書。
+ひとことで言うと: 試したが採用しなかった特徴量を作る関数の置き場。
 やり方:
   - REJECTED_FEATURE_BUILDERS: 名前 → 関数。train_lightgbm.py・train_xgboost.py は feature_definitions.FEATURE_BUILDERS と
     合わせて読み込むので、`train_lightgbm.py --feature 名前` で判定をやり直せる。

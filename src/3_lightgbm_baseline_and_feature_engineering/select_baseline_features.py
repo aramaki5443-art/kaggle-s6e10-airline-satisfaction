@@ -3,8 +3,8 @@
 目的: どの特徴量を足すとどれだけOOF AUCが伸びるかを1つずつ測り、ベースラインの土台を作る。
 ひとことで言うと: 「単独で一番当たる特徴量」から順にモデルへ1つずつ渡し、伸びが止まる所を探す。
 やり方:
-  - 特徴量の順番は、EDA.ipynb 6節の単変量AUC(値ごとの満足率をスコアにしたもの)の高い順で固定(ORDER)。
-  - `--n-features N` で上位N個を使い、cfgのfold設定(5fold、StratifiedKFold seed42)でLightGBMを学習してOOF AUCを出す。
+  - 特徴量の順番は、EDA.ipynb 6節の単変量AUC(値ごとの満足率をスコアにしたもの)の高い順で固定(FEATURE_ORDER)。
+  - `--n-features N` で上位N個を使い、configのfold設定(5fold、StratifiedKFold seed42)でLightGBMを学習してOOF AUCを出す。
     OOF(Out-Of-Fold)= 各行を「その行を学習に使っていないモデル」で予測した値。全行分そろえて評価する。
   - ハイパラは既定値に近いまま(learning_rate 0.05 + early stopping 100のみ設定)。
     feature_fraction(列の間引き)は既定の1.0なので、列数が変わっても木の抽選パターンが変わる副作用は無い。
