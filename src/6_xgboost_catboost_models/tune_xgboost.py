@@ -10,7 +10,7 @@
 なぜ: 単体の最良がスタックでの最良とは限らない(調整後のLightGBMはRealMLPと似て、混ぜると伸びが縮んだ)ため、
   上位数個のOOFでevaluate_stacking.pyを回してから選ぶ。seed42に合わせ込んだだけの設定を拾わないよう、選んだ設定は3seedで確認する。
 結果: 最良#35(max_depth 10・min_child_weight 23・L2 17・L1 0.11・gamma 0.10・max_bin 1023・subsample 0.97・colsample 0.45)が
-  3seed平均+0.000244(3seedとも改善)。ただしスタックへの上乗せは+0.000008にとどまった(調整後LightGBMとの順位相関0.992)。
+  3seed平均+0.000244(3seedとも改善)。ただしスタックへの上乗せは、調整前の+0.000003から+0.000008に増えただけ(+0.000005)だった(調整後LightGBMとの順位相関0.992)。
 使い方: python src/6_xgboost_catboost_models/tune_xgboost.py --n-trials 50
 """
 import argparse
