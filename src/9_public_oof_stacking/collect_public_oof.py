@@ -83,15 +83,11 @@ for folder in sorted(glob.glob(f"{args.raw_dir}/*/")):
             candidates.append((f"{prefix}_{name}", oof_table.iloc[:, -1].values, test_table.iloc[:, -1].values, dataset_name))
 
 
-def read_prediction(path, first_id):
-    if path.endswith(".npy"):
-        return np.load(path, allow_pickle=False)
-    return sort_by_id(pd.read_csv(path), first_id).iloc[:, -1].values
-
-
 for pair in args.named_pair:
     name, oof_file, test_file = pair.split("=")
-    candidates.append((name, read_prediction(oof_file, 0), read_prediction(test_file, n_train), os.path.basename(os.path.dirname(oof_file))))
+    oof, test = [np.load(f, allow_pickle=False) if f.endswith(".npy") else sort_by_id(pd.read_csv(f), first_id).iloc[:, -1].values
+                 for f, first_id in ((oof_file, 0), (test_file, n_train))]
+    candidates.append((name, oof, test, os.path.basename(os.path.dirname(oof_file))))
 
 # 比べる相手(--reference-dir のフォルダ)のlogitを、平均0・標準偏差1にそろえて持つ(内積/行数 = 相関になる)
 ref_logits = {}

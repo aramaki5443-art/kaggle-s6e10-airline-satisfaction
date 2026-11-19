@@ -135,15 +135,19 @@ EDAで、データの大まかな特徴をつかみ、特徴量エンジニア�
 **③ モデルで予想する(4個)**
 
 - **評価の期待値(4項目)**
-  - 着想の根拠: 公開ノートブック。11項目を1つずつ判定。期待値より低めに付けた人ほど満足していない(93%→30%)
+  - 着想の根拠: 公開ノートブック。同じ4点でも、ほかの項目の答え方から予想した点数(期待値)が低い人は満足率27%、高い人は94%と大きく違う(オンライン搭乗)。11項目を1つずつ判定した
   - 作った特徴量: 他の項目への答え方から、「この人ならこの項目に何点を付けそうか」をモデルで予想した点数(搭乗・足元・チェックイン・時刻の便利さ)
   - 改善幅: 各+0.000037〜+0.000088
 
 **コード:**
 
+採用した13個の特徴量の【仮説】【確認】【結果】【施策】とコードは、[feature_engineering.ipynb](src/3_lightgbm_baseline_and_feature_engineering/feature_engineering.ipynb)で順に追える(学習に使う`feature_definitions.py`と同じ特徴量になることを、ノートブックの最後で全行照合している)。
+
 | スクリプト | 役割 |
 |---|---|
-| [feature_definitions.py](src/3_lightgbm_baseline_and_feature_engineering/feature_definitions.py) | 特徴量の定義(候補・採用した一覧・Target Encoding)。全モデルがここから読み込む |
+| [feature_engineering.ipynb](src/3_lightgbm_baseline_and_feature_engineering/feature_engineering.ipynb) | 採用した特徴量ごとの仮説・確認・結果と、特徴量を作るコード |
+| [feature_definitions.py](src/3_lightgbm_baseline_and_feature_engineering/feature_definitions.py) | 採用した特徴量の定義とTarget Encoding。全モデルがここから読み込む |
+| [rejected_feature_candidates.py](src/3_lightgbm_baseline_and_feature_engineering/rejected_feature_candidates.py) | 試したが採用しなかった候補(約90個)。`--feature 名前`で判定し直せる |
 | [make_expected_rating.py](src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py) | 「他の特徴量から予想した評価の期待値」を前もって計算して保存する(重いので判定のたびには計算しない) |
 | [train_lightgbm.py](src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py) | LightGBMの学習と、特徴量の採否の判定。最終のLightGBMもこれ |
 | [analyze_shap.py](src/3_lightgbm_baseline_and_feature_engineering/analyze_shap.py) | 採用した特徴量の効き方をSHAPで確かめる |
@@ -341,6 +345,17 @@ flowchart LR
   9. **自分のTabM(ニューラルネット)を加えた**
      - 結果: ±0.000003以内。
      - 考察: 最も違う予測(順位相関0.94)だったが、単体が0.0024低く重みが付かなかった。「違う」と「強い」の両方が要る。
+- **最終の226本の選び方:**
+
+  | 段階 | 本数 | 選んだ理由 |
+  |---|---|---|
+  | ① cdeotte氏の公開OOF 124本を点検([8](#8-公開oofの点検方法を設定)) | 123本 | 1本は単体AUCが高すぎ、予測の平均がちょうど0.5で、他の予測を混ぜた結果とみられるので外した |
+  | ② ほかの公開データセットの191本を足す | +136本(計259本) | 同じ予測の写し(相関0.9999以上)50本、2段目の結果4本、行数が合わない1本を外した |
+  | ③ LightGBM系統を外す(上の4) | 211本 | 外すと3seedそろって+0.000014。自分のLightGBMもここで外した |
+  | ④ 後から公開されたOOFを1本ずつ判定(上の8) | +11本(計222本) | 3通りの分け方で改善したものだけ残した |
+
+  自分のモデルは、RealMLP・TabPFN(抜くとOOFが−0.000188・−0.000141と大きく下がる)と、XGBoost・CatBoost(係数は0.05・0.13と小さいが、抜くと−0.000007・−0.000028下がる)の4本を残した。LightGBMは③で外した。
+
 - **最終の結果:** **226本(自分のモデル4本+公開OOF 222本)、OOF 0.962266**(Private 0.96239)。
 
 - **最終提出:** CVで最良の226本のスタックを1本目に選んだ。LBに合わせた他の参加者の提出ファイルはOOFが無くCVで測れないので、混ぜるのは保険の2本目だけにした。
@@ -392,7 +407,8 @@ src/
 ├─ 1_exploratory_data_analysis/
 │    EDA.ipynb
 ├─ 3_lightgbm_baseline_and_feature_engineering/
-│    select_baseline_features.py、feature_definitions.py、make_expected_rating.py、train_lightgbm.py、analyze_shap.py
+│    select_baseline_features.py、feature_engineering.ipynb、feature_definitions.py、rejected_feature_candidates.py、
+│    make_expected_rating.py、train_lightgbm.py、analyze_shap.py
 ├─ 5_lightgbm_hyperparameter_tuning/
 │    tune_lightgbm.py
 ├─ 6_xgboost_catboost_models/

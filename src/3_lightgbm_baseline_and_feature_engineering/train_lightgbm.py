@@ -3,7 +3,7 @@
 目的: 特徴量エンジニアリングの施策を1つずつ、同じ条件でベースラインと比べる。最終のLightGBM(--predict)もこのスクリプト。
 ひとことで言うと: 「いつもの列」+「試したい列」で学習し直し、ベースラインと同じ行どうしで成績を比べる。
 やり方:
-  - 特徴量の定義(BASE_FEATURES・FEATURE_BUILDERS・ADOPTED_FEATURES・TARGET_ENCODING_SPECS)は src/3_lightgbm_baseline_and_feature_engineering/feature_definitions.py から読み込む。
+  - 特徴量の定義(BASE_FEATURES・FEATURE_BUILDERS・ADOPTED_FEATURES・TARGET_ENCODING_SPECS)は、不採用の候補(rejected_feature_candidates.py)と合わせて src/3_lightgbm_baseline_and_feature_engineering/feature_definitions.py から読み込む。
   - ベースラインは元の特徴量20個(select_baseline_features.py --n-features 20と同一)+採用済みの特徴量(ADOPTED_FEATURES)。`--feature 名前`でFEATURE_BUILDERSに登録した列を足す。
     比較相手のOOFは、最後に採用した特徴量を足したときのOOF(COMPARISON_OOF)。採用したらfeature_definitions.pyのADOPTED_FEATURESとここのCOMPARISON_OOFを更新する。
   - 比較は対応のあるブートストラップ(同じ行を復元抽出して、2つのOOFのAUC差を100回計算)で、差の揺れも出す。
@@ -31,6 +31,10 @@ from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
 # 特徴量の定義を読み込む(フォルダ名が数字で始まりパッケージにできないため、フォルダを検索パスに足す)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import feature_definitions as features  # noqa: E402
+import rejected_feature_candidates as rejected  # noqa: E402
+
+# 判定できる候補 = 採用した特徴量 + 試したが採用しなかった候補(判定をやり直せるように両方を読む)
+CANDIDATE_BUILDERS = {**features.FEATURE_BUILDERS, **rejected.REJECTED_FEATURE_BUILDERS}
 
 COMPARISON_OOF = "night_rsd_wifi_cv42"  # 比較相手 = data/oof_lgb_fe_<これ>.npy(最後に採用した特徴量を--cv-seed 42で足したときのOOF。3seedで比べるときはseed0・1も同名_cv0・_cv1)
 
@@ -43,7 +47,7 @@ def rank_auc(labels, scores):
 
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--feature", required=True, choices=features.FEATURE_BUILDERS, help="足す特徴量の候補の名前(何も足さないときは none)")
+ap.add_argument("--feature", required=True, choices=CANDIDATE_BUILDERS, help="足す特徴量の候補の名前(何も足さないときは none)")
 ap.add_argument("--adopted", default=None, help="ADOPTED_FEATURESを一時的に置き換える(カンマ区切り。切り分け実験用)")
 ap.add_argument("--comparison-oof", default=None, help="COMPARISON_OOFを一時的に置き換える")
 ap.add_argument("--n-trees", type=int, default=0, help="0より大きいと早期停止を使わず木の本数をこの値に固定する")
@@ -58,7 +62,7 @@ ap.add_argument("--tuned", action="store_true", help="5のハイパラ調整で�
 ap.add_argument("--save-name", default=None, help="OOF・test予測の保存名を指定する(提出用の構成が既存の実験のファイルを上書きしないため)")
 args = ap.parse_args()
 adopted = features.ADOPTED_FEATURES if args.adopted is None else [a for a in args.adopted.split(",") if a]
-dropped_cols = [c for a in adopted + [args.feature] for c in features.DROP_CANDIDATES.get(a, [])]  # 採用済みの「外す」候補も外す
+dropped_cols = [c for a in adopted + [args.feature] for c in rejected.DROP_CANDIDATES.get(a, [])]  # 採用済みの「外す」候補も外す
 comparison_oof = COMPARISON_OOF if args.comparison_oof is None else args.comparison_oof
 # 5のハイパラ調整(tune_lightgbm.py)で採用した設定: Optunaの試行14の値に、学習率を0.05→0.02に下げたもの
 TUNED_PARAMS = {"num_leaves": 61, "min_child_samples": 5, "reg_lambda": 29.265955275846228, "reg_alpha": 0.3399216318523539,
@@ -70,24 +74,24 @@ if args.tuned:
 if args.params:
     lgb_params.update(json.loads(args.params))
     print("ハイパラ", lgb_params)
-features.DEFAULT_LGB_PARAMS = lgb_params  # 元データの先生役(orig_teacher)も同じハイパラで学習するため
+features.DEFAULT_LGB_PARAMS = lgb_params  # 元データの先生役(不採用の候補orig_teacher)も同じハイパラで学習するため
 
 # データの置き場所・列名・foldの分け方(リポジトリのルートで実行する前提)
 config = {"train_csv": "data/train.csv", "test_csv": "data/test.csv", "id_col": "id", "target_col": "satisfaction",
           "cv": {"n_splits": 5, "seed": 42}}
-preprocess = features.PREPROCESSING.get(args.feature, lambda df: df)
+preprocess = rejected.PREPROCESSING.get(args.feature, lambda df: df)
 
 
 def build_features(df):
     """元の特徴量20個+採用済みの特徴量+今回の候補を並べ、外す候補の列を落とす。"""
-    parts = [df[features.BASE_FEATURES]] + [features.FEATURE_BUILDERS[a](df) for a in adopted] + [features.FEATURE_BUILDERS[args.feature](df)]
+    parts = [df[features.BASE_FEATURES]] + [CANDIDATE_BUILDERS[a](df) for a in adopted] + [CANDIDATE_BUILDERS[args.feature](df)]
     return pd.concat(parts, axis=1).drop(columns=dropped_cols)
 
 
 train = preprocess(pd.read_csv(config["train_csv"]))
 y = train[config["target_col"]].astype(int).values
-base_features = pd.concat([train[features.BASE_FEATURES]] + [features.FEATURE_BUILDERS[a](train) for a in adopted], axis=1)  # 今の土台
-X = pd.concat([base_features, features.FEATURE_BUILDERS[args.feature](train)], axis=1).drop(columns=dropped_cols)
+base_features = pd.concat([train[features.BASE_FEATURES]] + [CANDIDATE_BUILDERS[a](train) for a in adopted], axis=1)  # 今の土台
+X = pd.concat([base_features, CANDIDATE_BUILDERS[args.feature](train)], axis=1).drop(columns=dropped_cols)
 for c in features.CATEGORICAL_COLUMNS:
     if c in X:
         X[c] = X[c].astype("category")

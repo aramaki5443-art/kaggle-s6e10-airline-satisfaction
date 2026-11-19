@@ -38,19 +38,15 @@ members = pd.read_csv(args.members)
 y = pd.read_csv("data/train.csv", usecols=["satisfaction"])["satisfaction"].astype(int).values
 
 
-def member_path(member, prediction_type):
-    """prediction_type: "oof" または "test"。自分のモデル(data_subfolder=own)は data/ 直下、公開OOFは data/<data_subfolder>/ にある。"""
-    folder = "data" if member["data_subfolder"] == "own" else f"data/{member['data_subfolder']}"
-    return f"{folder}/{prediction_type}_{member['member_name']}.npy"
-
-
-def to_logit(p):
-    p = np.clip(p, 1e-6, 1 - 1e-6)
-    return np.log(p / (1 - p)).astype(np.float32)
-
-
 def load_logits(prediction_type):
-    return np.column_stack([to_logit(np.load(member_path(m, prediction_type)).astype(float).ravel()) for _, m in members.iterrows()])
+    """全メンバーの予測(prediction_type: "oof" または "test")を読み、logit=log(p/(1-p))にして横に並べる。
+    自分のモデル(data_subfolder=own)は data/ 直下、公開OOFは data/<data_subfolder>/ にある。"""
+    columns = []
+    for _, member in members.iterrows():
+        folder = "data" if member["data_subfolder"] == "own" else f"data/{member['data_subfolder']}"
+        p = np.clip(np.load(f"{folder}/{prediction_type}_{member['member_name']}.npy").astype(float).ravel(), 1e-6, 1 - 1e-6)
+        columns.append(np.log(p / (1 - p)).astype(np.float32))
+    return np.column_stack(columns)
 
 
 def standardize(v):

@@ -24,6 +24,9 @@ from sklearn.model_selection import StratifiedKFold
 # 特徴量の定義を読み込む(フォルダ名が数字で始まりパッケージにできないため、そのフォルダを検索パスに足す)
 sys.path.insert(0, "src/3_lightgbm_baseline_and_feature_engineering")
 import feature_definitions as features  # noqa: E402
+import rejected_feature_candidates as rejected  # noqa: E402
+
+CANDIDATE_BUILDERS = {**features.FEATURE_BUILDERS, **rejected.REJECTED_FEATURE_BUILDERS}  # --featureで試せる候補
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--cv-seed", type=int, default=42)
@@ -43,13 +46,13 @@ config = {"train_csv": "data/train.csv", "test_csv": "data/test.csv", "id_col": 
           "cv": {"n_splits": 5, "seed": 42}}
 train = pd.read_csv(config["train_csv"])
 y = train[config["target_col"]].astype(int).values
-X = pd.concat([train[features.BASE_FEATURES]] + [features.FEATURE_BUILDERS[a](train) for a in adopted], axis=1)
+X = pd.concat([train[features.BASE_FEATURES]] + [CANDIDATE_BUILDERS[a](train) for a in adopted], axis=1)
 for c in features.CATEGORICAL_COLUMNS:
     X[c] = X[c].astype("category")
 print(f"{X.shape[1]}列", flush=True)
 if args.predict:
     test = pd.read_csv(config["test_csv"])
-    X_test = pd.concat([test[features.BASE_FEATURES]] + [features.FEATURE_BUILDERS[a](test) for a in adopted], axis=1)
+    X_test = pd.concat([test[features.BASE_FEATURES]] + [CANDIDATE_BUILDERS[a](test) for a in adopted], axis=1)
     for c in features.CATEGORICAL_COLUMNS:
         X_test[c] = pd.Categorical(X_test[c], categories=X[c].cat.categories)  # trainと同じカテゴリ番号にそろえる
     test_pred = np.zeros(len(X_test))
