@@ -7,7 +7,7 @@
     合わせて読み込むので、`train_lightgbm.py --feature 名前` で判定をやり直せる。
   - 読み込まれたとき、不採用のTEの候補(REJECTED_TARGET_ENCODING_SPECS)を feature_definitions.TARGET_ENCODING_SPECS に足す
     (TEの置き換えは feature_definitions.target_encode_in_folds が行うため)。
-  - 各候補のコメントに、着想と結果(不採用・保留)を書いている。採否の基準はREADMEの2の節。
+  - 各候補のコメントに、着想と結果(不採用・保留)を書いている。採否の基準はREADMEの3の節。
 """
 import lightgbm as lgb
 import numpy as np

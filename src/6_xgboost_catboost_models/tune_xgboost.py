@@ -26,7 +26,7 @@ from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold
 
 # 特徴量の定義を読み込む(フォルダ名が数字で始まりパッケージにできないため、そのフォルダを検索パスに足す)
-sys.path.insert(0, "src/3_lightgbm_baseline_and_feature_engineering")
+sys.path.insert(0, "src/2_lightgbm_baseline_and_feature_engineering")
 import feature_definitions as features  # noqa: E402
 
 ap = argparse.ArgumentParser()

@@ -14,7 +14,7 @@
     投稿者の報告では、期待値の列は効き、「その点数の起こりにくさ」の列は効かなかった。
   - カテゴリ列(Class・Type of Travel・Customer Type)は順序のある整数に置き換えて同じ計算をする
     (Class: Eco=0・Eco Plus=1・Business=2 / 2値の列はP(1)=その値である確率になる)。
-実行: python src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --rating-col "Online boarding" --save-name boarding
+実行: python src/2_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --rating-col "Online boarding" --save-name boarding
 """
 import argparse
 import time

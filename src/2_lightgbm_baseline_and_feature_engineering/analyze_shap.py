@@ -11,7 +11,7 @@
   - SHAPの単位はlogit(対数オッズ)。+1は「満足のオッズを約2.7倍にする向きに押した」の意味。
 なぜ: gainは「学習中にどれだけ損失を減らしたか」で、分岐回数は「何回使われたか」。どちらも向きが分からず、
   数値の種類が多い列(距離など)で大きく出やすい。SHAPは予測そのものを分解するので、向きと組み合わせ効果まで見られる。
-使い方: python src/3_lightgbm_baseline_and_feature_engineering/analyze_shap.py --save-name shap_tuned [--interaction-rows 3000]
+使い方: python src/2_lightgbm_baseline_and_feature_engineering/analyze_shap.py --save-name shap_tuned [--interaction-rows 3000]
 """
 import argparse
 import os

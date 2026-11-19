@@ -3,7 +3,7 @@
 目的: 特徴量エンジニアリングの施策を1つずつ、同じ条件でベースラインと比べる。最終のLightGBM(--predict)もこのスクリプト。
 ひとことで言うと: 今の土台の特徴量に候補を1つ足して学習し直し、土台だけのときと同じ行どうしでOOF AUCを比べる。
 やり方:
-  - 特徴量の定義(BASE_FEATURES・FEATURE_BUILDERS・ADOPTED_FEATURES・TARGET_ENCODING_SPECS)は、不採用の候補(rejected_feature_candidates.py)と合わせて src/3_lightgbm_baseline_and_feature_engineering/feature_definitions.py から読み込む。
+  - 特徴量の定義(BASE_FEATURES・FEATURE_BUILDERS・ADOPTED_FEATURES・TARGET_ENCODING_SPECS)は、不採用の候補(rejected_feature_candidates.py)と合わせて src/2_lightgbm_baseline_and_feature_engineering/feature_definitions.py から読み込む。
   - ベースラインは元の特徴量20個(select_baseline_features.py --n-features 20と同一)+採用済みの特徴量(ADOPTED_FEATURES)。`--feature 名前`でFEATURE_BUILDERSに登録した列を足す。
     比較相手のOOFは、最後に採用した特徴量を足したときのOOF(COMPARISON_OOF)。採用したらfeature_definitions.pyのADOPTED_FEATURESとここのCOMPARISON_OOFを更新する。
   - 比較は対応のあるブートストラップ(同じ行を復元抽出して、2つのOOFのAUC差を100回計算)で、差の揺れも出す。
@@ -13,7 +13,7 @@
     検証用の行はコンペのデータのままなので、OOFは今までと同じ物差しで比べられる。元データの行もTEの満足率の計算に入る。
   - `--shap N`: fold0だけ学習し、検証foldからN行を抜き出してSHAP値(各列が予測をどれだけ押し上げ/押し下げたか)を
     LightGBM内蔵のTreeSHAP(pred_contrib)で計算し、data/shap_lgb_<save-name>.npzに保存して終わる(図はanalyze_shap.py)。
-実行: python src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --feature zero_flags
+実行: python src/2_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --feature zero_flags
 """
 import argparse
 import json

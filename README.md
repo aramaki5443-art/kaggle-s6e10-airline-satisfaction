@@ -16,7 +16,7 @@
 
 ## 取り組みの流れ
 
-段階ごとの詳細は下の各節([1](#1-eda)〜[9](#9-公開oofの導入))に書いた。コードは`src/`の下に、段階と同じ番号のフォルダで置いている(2・4はコードなし)。
+段階ごとの詳細は下の各節([1](#1-eda)〜[9](#9-公開oofの導入))に書いた。コードは`src/`の下に、段階と同じ番号のフォルダで置いている(3・4はコードなし)。
 
 ```mermaid
 ---
@@ -27,16 +27,17 @@ config:
 ---
 flowchart TD
   S1["<b>1. EDA</b><br>データを理解し、特徴量エンジニアリングの着想を得る"]
-  SC["<b>2. 特徴量の採用基準を設ける</b><br>fold分割の乱数(seed)を変えるだけで、特徴量の「あり−なし」のOOFの差が約0.00005揺れる<br>(1) 3seedで評価し、差の平均が+0.00003以上かつ2seed以上で改善なら採用<br>(2) Public LB(約6万行)の小さな差は追わず、OOF(70万行)で判断する<br>(この考え方は、のちのハイパラ・公開OOFの採否にも使った)"]
-  S2["<b>3. LightGBMでベースライン作成と特徴量エンジニアリング</b><br>軽く、欠損値もそのまま扱えるLightGBMで特徴量を1つずつ試す<br>ベースラインのPrivate LB 0.95910(上位76%) → 特徴量エンジニアリング後のPrivate LB 0.96102(上位47%)"]
+  S2["<b>2. LightGBMでベースライン作成と特徴量エンジニアリング</b><br>軽く、欠損値もそのまま扱えるLightGBMで特徴量を1つずつ試す<br>ベースラインのPrivate LB 0.95910(上位76%)"]
+  SC["<b>3. 特徴量の採用基準を設ける</b><br>fold分割の乱数(seed)を変えるだけで、特徴量の「あり−なし」のOOFの差が約0.00005揺れる<br>(1) 3seedで評価し、差の平均が+0.00003以上かつ2seed以上で改善なら採用(それまでの採用分も確かめ直した)<br>(2) Public LB(約6万行)の小さな差は追わず、OOF(70万行)で判断する<br>(この考え方は、のちのハイパラ・公開OOFの採否にも使った)<br>この基準で特徴量エンジニアリングを続けた後のPrivate LB 0.96102(上位47%)"]
   S3["<b>4. 別モデル(RealMLP)を導入</b><br>LightGBMと混ぜるとOOF +0.000888<br>Private LB 0.96192(上位31%)"]
   S4["<b>5. LightGBMのハイパラ調整</b><br>LightGBM単体のOOFは+0.00041伸びたが、RealMLPと混ぜるとOOFは+0.000046<br>Private LB 0.96189(上位32%)"]
   S5["<b>6. XGBoost・CatBoost・TabPFN作成</b><br>木どうしは似ている(相関0.98〜0.99)ので、仕組みの違うTabPFNも加える"]
   S6["<b>7. 5モデルアンサンブル</b><br>重みを学んで混ぜる。伸びの多くはTabPFN<br>Private LB 0.96208(上位29%)"]
   SK["<b>8. 公開OOFの点検方法を設定</b><br>行数・欠損・範囲外の値と、予測値の平均(約0.44になるはず)を確かめる。124本中1本を除外"]
   S7["<b>9. 公開OOFの導入</b><br>点検に合格した公開OOFを加えたあと、混ぜ方を調整<br>Private LB 0.96239(上位1.4%、52位)"]
-  S1 --> SC --> S2
-  S2 -->|"OOFの伸びが鈍り、Public LBは4日横ばい<br>→ 仕組みの違うモデルで補う"| S3
+  S1 --> S2
+  S2 -->|"1seedで採用した特徴量の差が、seedを変えると逆転した<br>→ 採否の基準を決める"| SC
+  SC -->|"OOFの伸びが鈍り、Public LBは4日横ばい<br>→ 仕組みの違うモデルで補う"| S3
   S3 -->|"LightGBM単体を強くしてRealMLPと混ぜるとスコアは伸びるか?"| S4
   S4 -->|"モデル単体を強くしても、複数モデルを混ぜたOOFは伸びにくい<br>→ 違うモデルを増やす"| S5
   S5 --> S6
@@ -45,7 +46,7 @@ flowchart TD
 
 ## 上位1.4%に届いた考察
 
-1. **ブレを測ってから採否基準を決めた:** 特徴量で決めた「分け方を3通り変えて判定する」考え方を、のちのハイパラや公開OOFの採否にも使い、偶然の改善を採用しないようにした(→[2](#2-特徴量の採用基準を設ける))。
+1. **ブレを測ってから採否基準を決めた:** 特徴量で決めた「分け方を3通り変えて判定する」考え方を、のちのハイパラや公開OOFの採否にも使い、偶然の改善を採用しないようにした(→[3](#3-特徴量の採用基準を設ける))。
 2. **単体モデルの強化より、仕組みの違うモデルの導入に時間を使った:** 5モデルのスタックで重く使われたのは、木と仕組みの違うTabPFN(係数0.42)とRealMLP(0.35)だった(→[5](#5-lightgbmのハイパラ調整)・[7](#7-5モデルアンサンブル))。
 3. **公開OOFを点検してから導入した:** 加えたときOOF(+0.00038)とPublic LB(+0.00043)が同じくらい伸び、甘いOOFによる崩れはなかった(→[8](#8-公開oofの点検方法を設定)・[9](#9-公開oofの導入))。
 4. **最終提出をCVで選んだ:** Public LB(約6万行)は0.0003未満の差を見分けられない。CVで選んだ提出(Public 513位)が、Privateでは52位になった。
@@ -56,14 +57,7 @@ EDAでは3つの仮説を確かめ、2つを特徴量にした。①飛行距離
 
 **コード:** [src/1_exploratory_data_analysis/EDA.ipynb](src/1_exploratory_data_analysis/EDA.ipynb)
 
-## 2. 特徴量の採用基準を設ける
-
-- 5分割のStratifiedKFold(seed 42)。比較は常に同じ行で行う。
-- 基準の+0.00003は、3通りの平均のブレ(0.00005÷√3≈0.00003)。
-- **反省:** この基準は緩く、効果ゼロでも約16%が通る。基準にわずかに届かなかった5つ(3seed平均+0.000001〜+0.000026)をまとめて入れても、採用に使っていないseedでは+0.000005とほぼ効かなかった。小さな差は偶然でも出るので、次のコンペからは基準をブレ2つ分に厳しくした。
-- 終了後、提出どうしの差の向きがPrivateと一致した割合は、OOFで98%、Public LBで92%で、OOFで判断したのは正しかった。
-
-## 3. LightGBMでベースライン作成と特徴量エンジニアリング
+## 2. LightGBMでベースライン作成と特徴量エンジニアリング
 
 **元の特徴量(コンペで最初から与えられた21個)**
 
@@ -81,12 +75,13 @@ EDAでは3つの仮説を確かめ、2つを特徴量にした。①飛行距離
 - 元の特徴量21個を、単変量AUCの高い順にLightGBMへ1つずつ足し、OOFの伸びを測った。
 - 20個目まではすべて改善。単独では弱い顧客区分(AUC 0.586)も+0.00113と、組み合わせで効いた。
 - 性別だけは−0.00002だったので外し、**20個を土台**にした(OOF 0.95846)。以降の特徴量はこの土台に足して判定した。
+- ベースラインの判定は、採用基準([3](#3-特徴量の採用基準を設ける))を設ける前だったので、いずれもseed 42の1回だけで行った。性別は、のちに特徴量を29個に増やした土台でも試し直したが、−0.000053で効かなかった(これも1seed)。
 
-**コード:** [src/3_lightgbm_baseline_and_feature_engineering/select_baseline_features.py](src/3_lightgbm_baseline_and_feature_engineering/select_baseline_features.py)
+**コード:** [src/2_lightgbm_baseline_and_feature_engineering/select_baseline_features.py](src/2_lightgbm_baseline_and_feature_engineering/select_baseline_features.py)
 
 ### (2) 特徴量エンジニアリング
 
-候補は1つずつ、土台と「土台+候補」をLightGBM(`train_lightgbm.py --feature 候補名`)で比べ、[2. 特徴量の採用基準](#2-特徴量の採用基準を設ける)の基準で採否を決めた。
+候補は1つずつ、土台と「土台+候補」をLightGBM(`train_lightgbm.py --feature 候補名`)で比べた。最初の2日は1seedで「OOFが上がれば採用」としていたが、途中で[3. 特徴量の採用基準](#3-特徴量の採用基準を設ける)を設け、それまでに採用した分も3seedで確かめ直した。
 
 **採用した特徴量**(元の特徴量20個+作った特徴量16個=36個。OOF 0.95846→0.96046)。作り方で3つに分け、着想の出どころ(EDA・公開ノートブック・Discussion等)は「着想の根拠」の先頭に書いた。改善幅は、注記のないものは3seed平均。
 
@@ -141,16 +136,16 @@ EDAでは3つの仮説を確かめ、2つを特徴量にした。①飛行距離
 
 **コード:**
 
-採用した13個の特徴量の【仮説】【確認】【結果】【施策】とコードは、[feature_engineering.ipynb](src/3_lightgbm_baseline_and_feature_engineering/feature_engineering.ipynb)で順に追える(学習に使う`feature_definitions.py`と同じ特徴量になることを、ノートブックの最後で全行照合している)。
+採用した13個の特徴量の【仮説】【確認】【結果】【施策】とコードは、[feature_engineering.ipynb](src/2_lightgbm_baseline_and_feature_engineering/feature_engineering.ipynb)で順に追える(学習に使う`feature_definitions.py`と同じ特徴量になることを、ノートブックの最後で全行照合している)。
 
 | スクリプト | 役割 |
 |---|---|
-| [feature_engineering.ipynb](src/3_lightgbm_baseline_and_feature_engineering/feature_engineering.ipynb) | 採用した特徴量ごとの仮説・確認・結果と、特徴量を作るコード |
-| [feature_definitions.py](src/3_lightgbm_baseline_and_feature_engineering/feature_definitions.py) | 採用した特徴量の定義とTarget Encoding。全モデルがここから読み込む |
-| [rejected_feature_candidates.py](src/3_lightgbm_baseline_and_feature_engineering/rejected_feature_candidates.py) | 試したが採用しなかった候補(約90個)。`--feature 名前`で判定し直せる |
-| [make_expected_rating.py](src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py) | 「他の特徴量から予想した評価の期待値」を前もって計算して保存する(重いので判定のたびには計算しない) |
-| [train_lightgbm.py](src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py) | LightGBMの学習と、特徴量の採否の判定。最終のLightGBMもこれ |
-| [analyze_shap.py](src/3_lightgbm_baseline_and_feature_engineering/analyze_shap.py) | 採用した特徴量の効き方をSHAPで確かめる |
+| [feature_engineering.ipynb](src/2_lightgbm_baseline_and_feature_engineering/feature_engineering.ipynb) | 採用した特徴量ごとの仮説・確認・結果と、特徴量を作るコード |
+| [feature_definitions.py](src/2_lightgbm_baseline_and_feature_engineering/feature_definitions.py) | 採用した特徴量の定義とTarget Encoding。全モデルがここから読み込む |
+| [rejected_feature_candidates.py](src/2_lightgbm_baseline_and_feature_engineering/rejected_feature_candidates.py) | 試したが採用しなかった候補(約90個)。`--feature 名前`で判定し直せる |
+| [make_expected_rating.py](src/2_lightgbm_baseline_and_feature_engineering/make_expected_rating.py) | 「他の特徴量から予想した評価の期待値」を前もって計算して保存する(重いので判定のたびには計算しない) |
+| [train_lightgbm.py](src/2_lightgbm_baseline_and_feature_engineering/train_lightgbm.py) | LightGBMの学習と、特徴量の採否の判定。最終のLightGBMもこれ |
+| [analyze_shap.py](src/2_lightgbm_baseline_and_feature_engineering/analyze_shap.py) | 採用した特徴量の効き方をSHAPで確かめる |
 
 ### (3) エンコーディングの比較
 
@@ -163,6 +158,15 @@ EDAでは3つの仮説を確かめ、2つを特徴量にした。①飛行距離
 | 出現回数(Frequency Encoding)の10候補 | 飛行距離×旅行目的だけ採用(+0.000057) |
 | CatBoost: 一部の特徴量だけカテゴリ扱い vs 全部をカテゴリ扱い | 全部をカテゴリ扱いで+0.000187(6の節) |
 | (試していない)カテゴリ4つ(性別・顧客区分・旅行目的・座席クラス)のOne-Hot | 値が2〜3種類しかなく、木のモデルではカテゴリ型で渡すのとほぼ同じ分け方になるため、優先しなかった |
+
+## 3. 特徴量の採用基準を設ける
+
+- **設けた時期と理由:** 特徴量エンジニアリングの2日目。1seedで採用した特徴量(飛行距離×旅行目的の出現回数、+0.00011)を、fold分割の乱数(seed)を変えて測り直すと、+0.000107・−0.000026・+0.000090と揺れ、seedによっては悪化すると分かった。
+- **決めた基準:** 3seed(42・0・1)で評価し、差の平均が+0.00003以上かつ2seed以上で改善なら採用。それまで1seedで採用していた8つも、この基準で確かめ直した。以降の特徴量エンジニアリング、のちのハイパラ・公開OOFの採否もこの考え方で判定した。
+- 5分割のStratifiedKFold(seed 42)。比較は常に同じ行で行う。
+- 基準の+0.00003は、3通りの平均のブレ(0.00005÷√3≈0.00003)。
+- **反省:** この基準は緩く、効果ゼロでも約16%が通る。基準にわずかに届かなかった5つ(3seed平均+0.000001〜+0.000026)をまとめて入れても、採用に使っていないseedでは+0.000005とほぼ効かなかった。小さな差は偶然でも出るので、次のコンペからは基準をブレ2つ分に厳しくした。
+- 終了後、提出どうしの差の向きがPrivateと一致した割合は、OOFで98%、Public LBで92%で、OOFで判断したのは正しかった。
 
 ## 4. 別モデル(RealMLP)を導入
 
@@ -406,7 +410,7 @@ flowchart LR
 src/
 ├─ 1_exploratory_data_analysis/
 │    EDA.ipynb
-├─ 3_lightgbm_baseline_and_feature_engineering/
+├─ 2_lightgbm_baseline_and_feature_engineering/
 │    select_baseline_features.py、feature_engineering.ipynb、feature_definitions.py、rejected_feature_candidates.py、
 │    make_expected_rating.py、train_lightgbm.py、analyze_shap.py
 ├─ 5_lightgbm_hyperparameter_tuning/
@@ -481,27 +485,27 @@ uv run python -m zipfile -e data/playground-series-s6e10.zip data/
 uv run jupyter notebook src/1_exploratory_data_analysis/EDA.ipynb
 
 # 3-(1). ベースライン: 元の特徴量を、単変量AUCの高い順に1つずつ足す(--n-features 20で20個まで)
-uv run python src/3_lightgbm_baseline_and_feature_engineering/select_baseline_features.py --n-features 20
+uv run python src/2_lightgbm_baseline_and_feature_engineering/select_baseline_features.py --n-features 20
 
 # 3-(2). 特徴量エンジニアリング
 #    評価の期待値を前もって計算する(採用した4項目)
-uv run python src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --rating-col "Online boarding" --save-name boarding
-uv run python src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --rating-col "Leg room service" --save-name legroom
-uv run python src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --rating-col "Checkin service" --save-name checkin
-uv run python src/3_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --rating-col "Departure/Arrival time convenient" --save-name time
+uv run python src/2_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --rating-col "Online boarding" --save-name boarding
+uv run python src/2_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --rating-col "Leg room service" --save-name legroom
+uv run python src/2_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --rating-col "Checkin service" --save-name checkin
+uv run python src/2_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --rating-col "Departure/Arrival time convenient" --save-name time
 #    採用した特徴量(36個)でLightGBMを学習し、testも予測する。候補を1つ試すときは --feature 候補名
-uv run python src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --feature none --predict
+uv run python src/2_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --feature none --predict
 
 # 5. LightGBMのハイパラ探索(Optuna、結果はdata/optuna_lgb.dbに保存)と、採用した設定での学習
 uv run python src/5_lightgbm_hyperparameter_tuning/tune_lightgbm.py --n-trials 50
-uv run python src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --feature none --tuned --save-name tuned_lr02 --predict
+uv run python src/2_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --feature none --tuned --save-name tuned_lr02 --predict
 
 # 6. XGBoost
 uv run python src/6_xgboost_catboost_models/tune_xgboost.py --n-trials 50
 uv run python src/6_xgboost_catboost_models/train_xgboost.py --tuned --save-name t35 --predict   # → data/oof_xgb_t35_cv42.npy
 
 # 6. CatBoost(KaggleのGPU)
-uv run python src/3_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --feature none --export-fe   # 入力 data/fe36_train.csv・fe36_test.csv を書き出す
+uv run python src/2_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --feature none --export-fe   # 入力 data/fe36_train.csv・fe36_test.csv を書き出す
 #   (1) この2つのCSVと src/6_xgboost_catboost_models/train_catboost.py を、Kaggleの非公開データセットにまとめてアップロードする
 #   (2) Kaggleで新しいノートブックを作り、(1)のデータセットを入力に付け、AcceleratorをGPUにする
 #   (3) セルで  !python /kaggle/input/<(1)のデータセット名>/train_catboost.py --run allcat_t21_cv42  を実行する(採用した設定だけを学習)
