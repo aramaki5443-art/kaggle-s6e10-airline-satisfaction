@@ -16,6 +16,7 @@
 結果: 最良#21(depth 7・l2 24.9・border 254・random_strength 0.17・bagging_temperature 0.42・max_ctr_complexity 4)が
   3seed平均+0.000076(3seedとも改善)。スタックへの上乗せは+0.000020(RealMLPとの順位相関が0.9700→0.9715に上昇)。
 """
+import argparse
 import glob
 import json
 import os
@@ -31,8 +32,8 @@ from sklearn.model_selection import StratifiedKFold
 N_TRIALS, LIMIT_HOURS = 30, 10.8
 TARGET_ENCODING_SPECS = {"te_distance_m3": ("Flight Distance", 3), "te_dist_class": (["Flight Distance", "Class"], 3)}
 N_BASE_FEATURES = 20  # 先頭20列が元の特徴量(feature_definitions.pyのBASE_FEATURES)
+argparse.ArgumentParser(description=__doc__.splitlines()[0]).parse_args()  # 引数は無い。--helpで説明だけ出して止まるようにする
 START_TIME = time.time()
-os.makedirs("optuna_cat", exist_ok=True)
 
 kaggle_files = glob.glob("/kaggle/input/**/fe36_train.csv", recursive=True)
 data_dir = os.path.dirname(kaggle_files[0]) if kaggle_files else "data"  # Kaggleではデータセット、手元ではdata/(GPUが要る)
@@ -95,6 +96,7 @@ def objective(trial):
 
 
 # 1回目は既定の設定: depth 6・l2 3・border 128・random_strength 1・bagging_temperature 1。max_ctr_complexityの既定は自動のため4を入れる
+os.makedirs("optuna_cat", exist_ok=True)  # 探索の記録(データベース・各試行のOOF)の保存先。探索を始める直前に作る
 study = optuna.create_study(study_name="cat_allcat_v1", storage="sqlite:///optuna_cat/optuna_cat.db", direction="maximize",
                             load_if_exists=True, sampler=optuna.samplers.TPESampler(seed=42),
                             pruner=optuna.pruners.MedianPruner(n_startup_trials=6, n_warmup_steps=1))

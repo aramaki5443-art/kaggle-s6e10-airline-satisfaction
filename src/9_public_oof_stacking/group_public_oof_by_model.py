@@ -7,11 +7,13 @@
   結果をdata/pub_oof/families.jsonに保存する(系統名→メンバー名の一覧)。
 使い方: python src/9_public_oof_stacking/group_public_oof_by_model.py
 """
+import argparse
 import glob
 import json
 import os
 import re
 
+argparse.ArgumentParser(description=__doc__.splitlines()[0]).parse_args()  # 引数は無い。--helpで説明だけ出して止まるようにする
 names = [os.path.basename(f)[4:-4] for folder in ["data/pub_oof/cdeotte124", "data/pub_oof/extra"]
          for f in glob.glob(f"{folder}/oof_*.npy")]
 names = [n for n in names if n != "nj_01"] + ["rmlp", "lgb", "cat", "xgb", "tabpfn"]  # 末尾5本は自分のモデル

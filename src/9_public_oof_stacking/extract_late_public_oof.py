@@ -9,11 +9,13 @@
   - npyはそのまま、npzは配列名、csv・parquetは列名(oof_column・test_columnに書いた名前。parquetの列名は数字の文字列)を読む。
 使い方: python src/9_public_oof_stacking/extract_late_public_oof.py
 """
+import argparse
 import os
 
 import numpy as np
 import pandas as pd
 
+argparse.ArgumentParser(description=__doc__.splitlines()[0]).parse_args()  # 引数は無い。--helpで説明だけ出して止まるようにする
 extraction = pd.read_csv("src/9_public_oof_stacking/late_public_oof_extraction.csv", dtype=str, keep_default_na=False)
 
 

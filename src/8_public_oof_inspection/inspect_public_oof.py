@@ -9,6 +9,7 @@
 なぜ: 1本でも答えを見たOOFが混ざると、2段目はそれに頼り切ってOOFだけ高くなり、LBで崩れる。
 使い方: python src/8_public_oof_inspection/inspect_public_oof.py data/pub_oof/cdeotte124
 """
+import argparse
 import glob
 import os
 import sys
@@ -19,7 +20,9 @@ from scipy.stats import spearmanr
 from sklearn.metrics import roc_auc_score
 
 sys.stdout.reconfigure(encoding="utf-8")
-folder = sys.argv[1]
+ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+ap.add_argument("folder", help="点検するフォルダ(oof_<名前>.npy・test_<名前>.npyが入ったもの)")
+folder = ap.parse_args().folder
 y = pd.read_csv("data/train.csv", usecols=["satisfaction"])["satisfaction"].astype(int).values
 n_test = len(pd.read_csv("data/test.csv", usecols=["id"]))
 own_realmlp = np.load("data/oof_realmlp_e4_avg2.npy")
