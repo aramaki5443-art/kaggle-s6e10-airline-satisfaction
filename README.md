@@ -498,18 +498,21 @@ uv run python -m zipfile -e data/playground-series-s6e10.zip data/
 スクリプトはすべてリポジトリのルートで、`uv run`を付けて実行する(`uv sync`で作った環境で動かすため)。各スクリプトのオプションは`--help`で見られる。
 
 ```bash
+# 2-(1). ベースライン: 元の特徴量を、単変量AUCの高い順に1つずつ足す(--n-features 20で20個まで)
+#        EDAノートブックの7節がこの出力 data/oof_lgb_forward_n20.npy を使うので、EDAより先に実行する
+uv run python src/2_lightgbm_baseline_and_feature_engineering/select_baseline_features.py --n-features 20
+
 # 1. EDA(ノートブックを開く)
 uv run jupyter notebook src/1_exploratory_data_analysis/EDA.ipynb
 
-# 3-(1). ベースライン: 元の特徴量を、単変量AUCの高い順に1つずつ足す(--n-features 20で20個まで)
-uv run python src/2_lightgbm_baseline_and_feature_engineering/select_baseline_features.py --n-features 20
-
-# 3-(2). 特徴量エンジニアリング
-#    評価の期待値を前もって計算する(採用した4項目)
+# 2-(2). 特徴量エンジニアリング
+#    評価の期待値を前もって計算する(採用した4項目。特徴量ノートブックと学習が data/aux_ev_*.npy を使う)
 uv run python src/2_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --rating-col "Online boarding" --save-name boarding
 uv run python src/2_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --rating-col "Leg room service" --save-name legroom
 uv run python src/2_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --rating-col "Checkin service" --save-name checkin
 uv run python src/2_lightgbm_baseline_and_feature_engineering/make_expected_rating.py --rating-col "Departure/Arrival time convenient" --save-name time
+#    特徴量ノートブック(採用した13個の仮説とコード。最後のセルで学習用のコードと同じ値になるかを照合する)
+uv run jupyter notebook src/2_lightgbm_baseline_and_feature_engineering/feature_engineering.ipynb
 #    採用した特徴量(36個)でLightGBMを学習し、testも予測する。候補を1つ試すときは --feature 候補名
 uv run python src/2_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --feature none --predict
 
@@ -579,6 +582,8 @@ uv run python src/9_public_oof_stacking/make_final_submission.py --save-name fin
 | 最終スタック(**Private LB**、Late Submission) | **0.96239** | **0.96239** | 0 |
 
 モデルごとのずれは±0.00005以内で上下どちらにも出ており、最終スタックでは打ち消し合ってPrivate LBは同じになった。
+
+ノートブックも上の手順の順で最初から実行し直した。EDAノートブックは、表と数値の出力・グラフ10枚がすべて元と同じになった。特徴量ノートブックは、最後の照合のセルで13個とも学習用のコードと同じ値になった。
 
 ## 開発について
 
