@@ -304,7 +304,7 @@ flowchart LR
 - **結果:** 最初の124本のうち1本を除外した(平均がちょうど0.5で、単体のAUCが自分のスタックより高い)。順位に直して他のモデルを混ぜたものとみた。
 - **その後の方針:** 点検に合格した公開OOFだけを、7のスタックに加える(→[9](#9-公開oofの導入))。
 
-**コード:** [src/8_public_oof_inspection/inspect_public_oof.py](src/8_public_oof_inspection/inspect_public_oof.py)(公開OOFのファイル自体は他の参加者の成果物なので含めない)
+**コード:** [src/8_public_oof_inspection/inspect_public_oof.py](src/8_public_oof_inspection/inspect_public_oof.py)(公開OOFのファイル自体は他の参加者の成果物なので含めない。取得先の一覧は[public_oof_sources.csv](src/8_public_oof_inspection/public_oof_sources.csv))
 
 ## 9. 公開OOFの導入
 
@@ -429,7 +429,7 @@ src/
 ├─ 7_stacking_ensemble/
 │    evaluate_stacking.py
 ├─ 8_public_oof_inspection/
-│    inspect_public_oof.py
+│    inspect_public_oof.py、public_oof_sources.csv
 └─ 9_public_oof_stacking/
      collect_public_oof.py、group_public_oof_by_model.py、extract_late_public_oof.py、make_final_submission.py、
      final_stack_members.csv、late_public_oof_extraction.csv
@@ -480,12 +480,13 @@ uv run python -m zipfile -e data/playground-series-s6e10.zip data/
 
 | 処理 | 場所 | 時間 |
 |---|---|---|
-| ベースライン・期待値の計算・LightGBM | 手元(CPU 8スレッド) | 合計約30〜40分 |
-| XGBoost(採用した設定で1回) | 手元 | 約40分 |
+| ベースライン・期待値の計算・LightGBM | 手元(CPU 8スレッド) | 合計約55分 |
+| XGBoost(採用した設定で1回) | 手元 | 約20分 |
 | CatBoost(採用した設定) | KaggleのGPU | 約17分 |
-| RealMLP(2seed) | KaggleのGPU | 約1〜2時間 |
-| TabPFN(5fold) | KaggleのGPU | 約8時間 |
-| 最終スタック | 手元 | 約30分 |
+| RealMLP(2seed) | KaggleのGPU | 約25分 |
+| TabPFN(5fold) | KaggleのGPU | 約8時間(1foldあたり約1.5時間。foldを2つのノートブックに分けて同時に動かすと約5時間) |
+| 公開OOFの取得(約3.5GB) | 手元 | 約1〜1.5時間(回線しだい) |
+| 公開OOFの整形・最終スタック | 手元 | 約15分 |
 
 ### 実行
 
@@ -535,20 +536,36 @@ uv run python src/2_lightgbm_baseline_and_feature_engineering/train_lightgbm.py 
 uv run python src/7_stacking_ensemble/evaluate_stacking.py LightGBM=data/oof_lgb_fe_tuned_lr02.npy XGBoost=data/oof_xgb_t35_cv42.npy CatBoost=data/oof_cat_allcat_t21_cv42.npy
 
 # 8. 公開OOFを取得し、点検する
-#   データセットは data/pub_oof/raw/<所有者>_<データセット名>/ に、ノートブックの出力は data/pub_oof/raw/nb_<所有者>_<ノートブック名>/ に置く。
-#   使ったものの一覧は final_stack_members.csv の published_by 列。cdeotte氏の124本だけは data/pub_oof/cdeotte124/ に直接置く
+#   (1) cdeotte氏の124本(最初に点検した公開OOF)は data/pub_oof/cdeotte124/ に置く
 uv run kaggle datasets download cdeotte/s6e10-124-public-oof-and-test-predictions -p data/pub_oof/cdeotte124 --unzip
-#   ほかのデータセットも同じく datasets download で、ノートブックの出力は kernels output で取る(例)
-uv run kaggle kernels output yekenot/ps-s6-e10-realmlp-pytabkit -p data/pub_oof/raw/nb_yekenot_ps-s6-e10-realmlp-pytabkit
-#   dariushafshar/s6e10-golem-oof-library は、まとめてダウンロードすると空になることがあるので、-f でファイルごとに取る
+#   (2) 9で使うほかの公開OOF(17か所)を、一覧 public_oof_sources.csv の1行ずつについて取得し、data/pub_oof/raw/<save_folder>/ に置く
+#       (kaggle_type が dataset ならデータセットを、notebook ならノートブックの出力を取る)
+tail -n +2 src/8_public_oof_inspection/public_oof_sources.csv | tr -d '\r' | while IFS=, read kaggle_type kaggle_name save_folder; do
+  if [ "$kaggle_type" = notebook ]; then
+    uv run kaggle kernels output "$kaggle_name" -p "data/pub_oof/raw/$save_folder" < /dev/null
+  else
+    uv run kaggle datasets download "$kaggle_name" -p "data/pub_oof/raw/$save_folder" --unzip < /dev/null
+  fi
+done
+#   (3) dariushafshar/s6e10-golem-oof-library は、まとめてダウンロードすると(2)で404エラーや空になることがあるので、
+#       ファイルの一覧(大きさの欄が数字の行)からファイル名を取り出し、1つずつ取り直す
+G=data/pub_oof/raw/dariushafshar_s6e10-golem-oof-library
+for file in $(uv run kaggle datasets files dariushafshar/s6e10-golem-oof-library --page-size 200 2>/dev/null | awk '$2 ~ /^[0-9]+$/ {print $1}'); do
+  uv run kaggle datasets download dariushafshar/s6e10-golem-oof-library -f "$file" -p "$G" --unzip
+done
+#   (4) 点検する
 uv run python src/8_public_oof_inspection/inspect_public_oof.py data/pub_oof/cdeotte124
 
 # 9. 公開OOFの形をそろえ、226本を混ぜて提出ファイルを作る
 #   (1) 形をそろえ、同じ予測の写しを外す(ファイル名が独自の3本は --named-pair で名前を付ける)
 R=data/pub_oof/raw
 uv run python src/9_public_oof_stacking/collect_public_oof.py --reference-dir data/pub_oof/cdeotte124 --out-dir data/pub_oof/extra --named-pair   "najiam_07xgb=$R/najiama_s6e10-oof/07_XGBoost_oof.csv=$R/najiama_s6e10-oof/07_submission.csv"   "herman_cat=$R/nb_hermengardo_single-catboost-eda-ps6e10/oof_train.npy=$R/nb_hermengardo_single-catboost-eda-ps6e10/oof_test.npy"   "yekeno_realmlp=$R/nb_yekenot_ps-s6-e10-realmlp-pytabkit/oof_preds.csv=$R/nb_yekenot_ps-s6-e10-realmlp-pytabkit/submission.csv"
-#   (2) 後から足した11本: late_public_oof_extraction.csv のノートブックの出力を data/pub_oof/raw_late/<所有者>_<ノートブック名>/ に置いて取り出す
+#   (2) 後から足した11本: late_public_oof_extraction.csv の kaggle_notebook 列のノートブックの出力を、
+#       data/pub_oof/raw_late/<所有者>_<ノートブック名>/ に取得して取り出す
 #       (data_subfolder 列の pub_oof/new1026 などは「10月26日に足した公開OOF」のように、追加した日付ごとのフォルダ)
+for notebook in $(tail -n +2 src/9_public_oof_stacking/late_public_oof_extraction.csv | tr -d '\r' | cut -d, -f3 | sort -u); do
+  uv run kaggle kernels output "$notebook" -p "data/pub_oof/raw_late/${notebook/\//_}"
+done
 uv run python src/9_public_oof_stacking/extract_late_public_oof.py
 #   (3) 226本を混ぜて提出ファイルを作る
 uv run python src/9_public_oof_stacking/make_final_submission.py --save-name final226 --lgb-seeds 5 --save   # → data/submission_final226.csv
@@ -579,6 +596,8 @@ uv run python src/9_public_oof_stacking/make_final_submission.py --save-name fin
 | 最終スタック(**Private LB**、Late Submission) | **0.96239** | **0.96239** | 0 |
 
 モデルごとのずれは±0.00003以内で上下どちらにも出ており、最終スタックではPrivate LBが同じになった。
+
+公開OOFは、手順8・9のコマンドをそのまま新しいフォルダで実行して取り直し、前回と同じファイル(名前と大きさ)がそろうことを確かめた。
 
 ノートブックも上の手順の順で最初から実行し直した。EDAノートブックは、表と数値の出力・グラフ10枚がすべて元と同じになった。特徴量ノートブックは、最後の照合のセルで13種類とも学習用のコードと同じ値になった。
 
