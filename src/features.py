@@ -20,7 +20,7 @@ from sklearn.model_selection import KFold, StratifiedKFold
 DATA_DIR = Path(os.environ.get("AIRLINE_DATA_DIR", Path(__file__).resolve().parents[1] / "data"))
 TARGET = "satisfaction"
 
-ORIGINAL_FEATURES_BY_UNIVARIATE_AUC = [  # 元の特徴量21個。EDA 6節の「値ごとの満足率」の単変量AUCの高い順
+ORIGINAL_FEATURES_BY_UNIVARIATE_AUC = [  # 元の特徴量21個。EDA 1節の「値ごとの満足率」の単変量AUCの高い順
     "Online boarding", "Class", "Inflight entertainment", "Inflight wifi service", "Seat comfort",
     "Flight Distance", "Type of Travel", "On-board service", "Cleanliness", "Leg room service", "Age",
     "Ease of Online booking", "Baggage handling", "Checkin service", "Food and drink", "Gate location",
@@ -58,7 +58,7 @@ def comfort_business_travel(df):
 
 
 def comfort_loyal_business_travel(df):
-    """常連かつ出張客だけ快適さを持つ。常連でない客は快適さが効かない(EDA 8節)。"""
+    """常連かつ出張客だけ快適さを持つ。常連でない客は快適さが効かない(EDA 6節)。"""
     loyal_business = (df["Type of Travel"] == "Business travel") & (df["Customer Type"] == "Loyal Customer")
     return pd.DataFrame({"comfort_loyal_business_travel": comfort(df).where(loyal_business)})
 
