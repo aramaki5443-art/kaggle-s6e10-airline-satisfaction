@@ -8,7 +8,6 @@ notebooks/03_feature_engineering.ipynb を見る(最後のセルで、このフ�
 - 値ごとの満足率(Target Encoding)は答えを使うので、FEATURE_BUILDERSでは元の値(キー)だけを置き、
   学習のfoldごとに target_encode_in_folds で満足率に置き換える。
 """
-import os
 from pathlib import Path
 
 import lightgbm as lgb
@@ -16,8 +15,8 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import KFold, StratifiedKFold
 
-# データの置き場所。既定はリポジトリ直下の data/(環境変数 AIRLINE_DATA_DIR で変えられる)
-DATA_DIR = Path(os.environ.get("AIRLINE_DATA_DIR", Path(__file__).resolve().parents[1] / "data"))
+# train.csv・test.csvを置き、予測も保存するフォルダ(リポジトリ直下の data/)
+DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 TARGET = "satisfaction"
 
 ORIGINAL_FEATURES_BY_UNIVARIATE_AUC = [  # 元の特徴量21個。00_baselineの2節の「値ごとの満足率」の単変量AUCの高い順
