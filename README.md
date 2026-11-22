@@ -33,7 +33,7 @@ EDAで客層ごとの偏りを調べたあと、LightGBMで特徴量を1つず�
 | No. | ノートブック | 内容 | 主な成果 |
 |---|---|---|---|
 | 00 | [Baseline](notebooks/00_baseline.ipynb) | 元の特徴量21個を単変量AUCの高い順に1つずつ足し、LightGBMの土台を決める | 性別を除く20個。OOF 0.95846 |
-| 01 | [EDA](notebooks/01_EDA.ipynb) | 数値・評価・カテゴリの全体像と、3つの仮説(客層の違い・0点の意味・客層ごとの評価の効き方)の確認 | 「私用客は評価に関係なく満足率約10%」→ ゲート特徴量の着想 |
+| 01 | [EDA](notebooks/01_EDA.ipynb) | 全体像から生まれた2つの仮説(客層の違い・0点の意味)をEDAで確かめ、特徴量を作る | 「私用客は評価に関係なく満足率約10%」→ ゲート特徴量の着想 |
 | 02 | [Feature Engineering](notebooks/02_feature_engineering.ipynb) | 採用した13種類の仮説・確認・コード、採否の基準、不採用169個の一覧、SHAP | OOF 0.95846 → 0.96046 |
 | 03 | [Modeling](notebooks/03_modeling.ipynb) | XGBoost・CatBoost・RealMLP・TabPFNを作り、単体の強さと予測の似かたを比べる | 5モデルとも0.9604〜0.9612、木どうしだけが似ている |
 | 04 | [Hyperparameter Tuning](notebooks/04_hyperparameter_tuning.ipynb) | Optunaで木の3モデルを調整し、混ぜたときの伸びを確かめる | 単体の伸びは、混ぜると約1/9に縮む |
