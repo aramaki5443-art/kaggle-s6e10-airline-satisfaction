@@ -1,20 +1,11 @@
-"""CatBoost(全特徴量をカテゴリ扱い)のハイパラを、KaggleのGPUでOptunaにより探す。
+"""CatBoost(全特徴量をカテゴリ扱い)のハイパラを、KaggleのGPUでOptunaにより探す(notebooks/04_hyperparameter_tuning の3節)。
 
-目的: 全列カテゴリ化で単体0.960832になったCatBoostを調整し、スタッキングへの上乗せが増えるかを確かめる。
-ひとことで言うと: LightGBM・XGBoostの調整と同じやり方を、CatBoostの6つのつまみに当てはめる。
-やり方:
-  - データ・TE・全列カテゴリ化はtrain_catboost.pyと同一(入力はtrain_lightgbm.py --export-feで書き出したfe36_*.csv。
-    Kaggleではデータセットとして読み込ませる。元の特徴量20個を文字列のカテゴリ列に、TEの2列はfoldごとに計算)。
-    fold分割はseed42の5fold、学習率0.05、早期停止100本。TEはfoldごとに1回だけ計算して使い回す。
-  - つまみ: depth 4〜10・l2_leaf_reg 1〜30・border_count 32/64/128/254・random_strength 0.1〜10・bagging_temperature 0〜1・
-    max_ctr_complexity 1〜4(カテゴリ列を何列まで組み合わせて集計するか)。1回目は既定の設定。
-  - 途中のfoldまでの平均AUCが過去の中央値より低ければ打ち切る(MedianPruner)。KaggleのGPUの12時間の上限に収まるよう、
-    10.8時間で新しい試行を止める。
-  - 各試行のOOFと結果をoptuna_cat/に保存する(上位の設定のスタックでの伸びを後で測るため)。testの予測は選んだ設定だけ後で作る。
-なぜ: 公開ノートブックで深さ6〜7・l2 10が+0.00007と報告されていた。全列をカテゴリ列にしたため、組み合わせの深さ
-  (max_ctr_complexity)が効きやすいと考えた。単体の最良がスタックの最良とは限らないため、上位数個で比べる。
-結果: 最良#21(depth 7・l2 24.9・border 254・random_strength 0.17・bagging_temperature 0.42・max_ctr_complexity 4)が
-  3seed平均+0.000076(3seedとも改善)。スタックへの上乗せは+0.000020(RealMLPとの順位相関が0.9700→0.9715に上昇)。
+- データ・値ごとの満足率の置き換え・全特徴量のカテゴリ化は train_catboost.py と同じ。分け方はseed 42の5分割、学習率0.05、早期停止100本。
+- 探すハイパラ: depth 4〜10・l2_leaf_reg 1〜30・border_count 32/64/128/254・random_strength 0.1〜10・bagging_temperature 0〜1・
+  max_ctr_complexity 1〜4(カテゴリを何個まで組み合わせて集計するか)。1試行目は既定の設定。
+- 途中のfoldまでの平均AUCが過去の中央値より低ければ打ち切る。KaggleのGPUの12時間の上限に収まるよう、10.8時間で新しい試行を止める。
+- 結果: 最良の試行#21(depth 7・l2 24.9・border 254・random_strength 0.17・bagging_temperature 0.42・max_ctr_complexity 4)が
+  3seed平均+0.000076(3seedとも改善)。5モデルのスタックへの上乗せは+0.000020。
 """
 import argparse
 import glob
@@ -30,27 +21,27 @@ from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold
 
 N_TRIALS, LIMIT_HOURS = 30, 10.8
-TARGET_ENCODING_SPECS = {"te_distance_m3": ("Flight Distance", 3), "te_dist_class": (["Flight Distance", "Class"], 3)}
-N_BASE_FEATURES = 20  # 先頭20列が元の特徴量(feature_definitions.pyのBASE_FEATURES)
+TARGET_ENCODING_SPECS = {"distance_satisfaction_rate": ("Flight Distance", 3), "distance_class_satisfaction_rate": (["Flight Distance", "Class"], 3)}
+N_BASE_FEATURES = 20  # 先頭20列が元の特徴量(src/features.pyのBASE_FEATURES)
 argparse.ArgumentParser(description=__doc__.splitlines()[0]).parse_args()  # 引数は無い。--helpで説明だけ出して止まるようにする
 START_TIME = time.time()
 
-kaggle_files = glob.glob("/kaggle/input/**/fe36_train.csv", recursive=True)
+kaggle_files = glob.glob("/kaggle/input/**/features36_train.csv", recursive=True)
 data_dir = os.path.dirname(kaggle_files[0]) if kaggle_files else "data"  # Kaggleではデータセット、手元ではdata/(GPUが要る)
-X = pd.read_csv(f"{data_dir}/fe36_train.csv")
+X = pd.read_csv(f"{data_dir}/features36_train.csv")
 y = X.pop("satisfaction").values
 X = X.drop(columns="id")
 base_cols = list(X.columns[:N_BASE_FEATURES])
-X = X.assign(**{c: X[c].fillna(-1).astype(str) for c in base_cols})  # 全列カテゴリ化(train_catboost.pyのallcatと同一)
+X = X.assign(**{c: X[c].fillna(-1).astype(str) for c in base_cols})  # 全列カテゴリ化(train_catboost.pyのallcatと同じ)
 
 
-def target_encode(key_fit, y_fit, key_apply, model):  # feature_definitions.pyと同一
+def target_encode(key_fit, y_fit, key_apply, model):  # src/features.pyと同一
     prior = y_fit.mean()
     stats = pd.DataFrame({"key": key_fit, "y": y_fit}).groupby("key")["y"].agg(["sum", "count"])
     return pd.Series(key_apply).map((stats["sum"] + model * prior) / (stats["count"] + model)).fillna(prior).values
 
 
-def target_encode_in_folds(X_fit, y_fit, others, seed):  # feature_definitions.pyと同一
+def target_encode_in_folds(X_fit, y_fit, others, seed):  # src/features.pyと同一
     X_fit = X_fit.copy(); others = [other.copy() for other in others]
     for name, (_, model) in TARGET_ENCODING_SPECS.items():
         key = X_fit[name].values; encoded = np.zeros(len(X_fit))

@@ -1,25 +1,13 @@
-"""CatBoostをKaggleのGPUで学習し、OOFとtestの予測を保存する。
+"""CatBoostをKaggleのGPUで5分割学習し、OOFとtestの予測を保存する(notebooks/03_modeling・04_hyperparameter_tuning で読み込む)。
 
-目的: RealMLP+LightGBM(+XGBoost)のアンサンブルに、木のモデルとしてCatBoostを足す価値があるかを調べる。
-ひとことで言うと: LightGBMと同じ36列を、カテゴリ列の扱い方が違うCatBoostに学習させ、違う予測になるかを見る。
-やり方:
-  - 特徴量はfeature_definitions.pyの採用済みの列(`python src/2_lightgbm_baseline_and_feature_engineering/train_lightgbm.py --feature none --export-fe`でdata/fe36_*.csvに書き出す。
-    Kaggleで動かすときは、このCSVをデータセットとして読み込ませる)。TEの2列(距離・距離×Class)だけは
-    キーのまま受け取り、foldごとに計算する(target_encode_in_folds・target_encodeはfeature_definitions.pyと同一)。
-  - Class・Type of Travel・Customer TypeはCatBoostのカテゴリ列として渡す(CatBoost独自の、答えを順番に使う集計で数値化される)。
-  - 学習率0.05、木の本数は検証foldでの早期停止(100本)で決める(LightGBM・XGBoostの判定と同じ条件)。ほかは既定(depth 6等)。
-  - RUNSの各行(タグ, fold分割のseed, 元の特徴量20個だけか, 上書きするハイパラ, 距離の扱い)を順に学習し、oof_cat_<タグ>.npy・test_cat_<タグ>.npyを保存。--run タグ で1行だけ学習できる。
-  - 距離の扱い: None=数値のまま。"add"=数値の列は残し、同じ値の文字列コピーdist_catをカテゴリ列として足す。
-    "rep"=Flight Distanceの数値列そのものをカテゴリ列に置き換える。このコンペで一番効いたのは距離を路線IDとして扱うこと
-    (TEの2列)なので、CatBoost独自のカテゴリ処理(答えを行の順番に使う集計+カテゴリ同士の組み合わせ)で距離を扱えば、
-    LightGBMのTEとは違う予測になる可能性がある。
-    "allcat"=元の特徴量20個(数値・評価・カテゴリ)を全て文字列にしてカテゴリ列に置き換える(作り込み16列・TEはそのまま)。
-    公開ノートブックで全列カテゴリ化+自前TEなしが単体+0.00015。まず「全列カテゴリ化」だけを切り分ける。
-    "allcat_note"=allcatに加えてTEの2列を外す(allcatとの差がTEを外した効果)。
-  - ローカル実行: /kaggle/inputが無ければdata/fe36_*.csvを読み、CPU(8スレッド)で学習してdata/に保存する。
-    GPUとCPUではCatBoostの計算(境界の作り方等)が違うので、比較の基準もCPUで学習し直す。
-なぜ: 木のモデル同士は予測が似やすい(XGBoostは「もう1本のLightGBM」程度)。CatBoostはカテゴリ列の扱いと木の形
-  (左右対称の木)が違うため、XGBoostより違う予測になる可能性がある。
+- 入力: notebooks/03_modeling で書き出した data/features36_train.csv・features36_test.csv(36個の特徴量。値ごとの満足率の2列はキーのまま)。
+  Kaggleでは、このCSVとこのスクリプトを非公開のデータセットにまとめて読み込ませる。
+- 値ごとの満足率の2列は、foldごとに答えを見ない値へ置き換える(target_encode・target_encode_in_folds は src/features.py と同じ処理)。
+- 元の特徴量20個はすべて文字列にしてカテゴリ扱いにする("allcat"。公開ノートブックの「全特徴量をカテゴリ扱い」を切り分けて採用、+0.000187)。
+- 学習率0.05、木の本数は検証foldでの早期停止(100本)。TUNED_PARAMS は tune_catboost.py の最良の試行(#21)。
+- RUNS の各行(名前, fold分割のseed, 元の特徴量20個だけか, 上書きするハイパラ, 距離・カテゴリの扱い)を順に学習する。
+  --run 名前 で1行だけ学習できる(最終提出で使ったのは allcat_t21_cv42 → data/oof_catboost_tuned.npy に置く)。
+- 手元で動かすと(/kaggle/input が無いとき)、data/ を読みCPUで学習する。GPUとは計算の仕方が違うので結果も変わり、数時間かかる。
 """
 import argparse
 import glob
@@ -45,25 +33,25 @@ if args.run:
     RUNS = [run for run in RUNS if run[0] == args.run]
     assert RUNS, f"RUNSに{args.run}がない"
 CATEGORICAL_COLUMNS = ["Customer Type", "Type of Travel", "Class"]
-TARGET_ENCODING_SPECS = {"te_distance_m3": ("Flight Distance", 3), "te_dist_class": (["Flight Distance", "Class"], 3)}
-N_BASE_FEATURES = 20  # 先頭20列が元の特徴量(feature_definitions.pyのBASE_FEATURES)
+TARGET_ENCODING_SPECS = {"distance_satisfaction_rate": ("Flight Distance", 3), "distance_class_satisfaction_rate": (["Flight Distance", "Class"], 3)}
+N_BASE_FEATURES = 20  # 先頭20列が元の特徴量(src/features.pyのBASE_FEATURES)
 
-kaggle_files = glob.glob("/kaggle/input/**/fe36_train.csv", recursive=True)
+kaggle_files = glob.glob("/kaggle/input/**/features36_train.csv", recursive=True)
 KAGGLE = bool(kaggle_files)
 data_dir, out_dir = (os.path.dirname(kaggle_files[0]), ".") if KAGGLE else ("data", "data")
-train = pd.read_csv(f"{data_dir}/fe36_train.csv"); test = pd.read_csv(f"{data_dir}/fe36_test.csv")
+train = pd.read_csv(f"{data_dir}/features36_train.csv"); test = pd.read_csv(f"{data_dir}/features36_test.csv")
 y = train.pop("satisfaction").values
 ids = test["id"].values
 train, test = train.drop(columns="id"), test.drop(columns="id")
 
 
-def target_encode(key_fit, y_fit, key_apply, model):  # feature_definitions.pyと同一
+def target_encode(key_fit, y_fit, key_apply, model):  # src/features.pyと同一
     prior = y_fit.mean()
     stats = pd.DataFrame({"key": key_fit, "y": y_fit}).groupby("key")["y"].agg(["sum", "count"])
     return pd.Series(key_apply).map((stats["sum"] + model * prior) / (stats["count"] + model)).fillna(prior).values
 
 
-def target_encode_in_folds(X_fit, y_fit, others, seed):  # feature_definitions.pyと同一
+def target_encode_in_folds(X_fit, y_fit, others, seed):  # src/features.pyと同一
     X_fit = X_fit.copy(); others = [other.copy() for other in others]
     for name, (_, model) in TARGET_ENCODING_SPECS.items():
         if name not in X_fit:

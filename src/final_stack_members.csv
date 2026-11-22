@@ -210,10 +210,10 @@ sadamt_orig_model_pred,other,pub_oof/extra,sadamtorres_ps-s6e10-airline-satisfac
 sadamt_xgb_base,xgb,pub_oof/extra,sadamtorres_ps-s6e10-airline-satisfaction-artifacts
 sadamt_xgb_tuned,xgb,pub_oof/extra,sadamtorres_ps-s6e10-airline-satisfaction-artifacts
 yekeno_realmlp,mlp,pub_oof/extra,nb_yekenot_ps-s6-e10-realmlp-pytabkit
-realmlp_e4_avg2,mlp,own,自分(RealMLP・TabPFNは公開ノートブックの再現)
-cat_allcat_t21_cv42,cat,own,自分
-xgb_t35_cv42,xgb,own,自分
-tabpfn_raw21_s0,tabpfn,own,自分(RealMLP・TabPFNは公開ノートブックの再現)
+realmlp,mlp,own,自分(RealMLP・TabPFNは公開ノートブックの再現)
+catboost_tuned,cat,own,自分
+xgboost_tuned,xgb,own,自分
+tabpfn,tabpfn,own,自分(RealMLP・TabPFNは公開ノートブックの再現)
 km_ladder_lgb,(後から追加),pub_oof/new1026,koumeimaki(Feature Ladder)
 km_ladder_xgb,(後から追加),pub_oof/new1026,koumeimaki(Feature Ladder)
 th_xgb,(後から追加),pub_oof/new1026,thethiago28

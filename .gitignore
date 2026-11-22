@@ -4,3 +4,4 @@ __pycache__/
 *.npy
 *.parquet
 submission*.csv
+tools_build_notebooks/
