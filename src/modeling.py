@@ -1,6 +1,6 @@
 """学習と評価の共通処理: 5分割の交差検証(LightGBM・XGBoost)、採用したハイパラ、Optunaの探索、2段目のスタッキング。
 
-ノートブック(notebooks/03〜06)から読み込んで使う。分け方はどのモデルも StratifiedKFold(5, shuffle=True, random_state=42) にそろえ、
+ノートブック(notebooks/03〜07)から読み込んで使う。分け方はどのモデルも StratifiedKFold(5, shuffle=True, random_state=42) にそろえ、
 同じ行どうしでOOF(各行を、その行を学習していないモデルで予測した値)を比べたり混ぜたりできるようにしている。
 """
 import itertools
@@ -21,13 +21,13 @@ import features
 N_SPLITS, CV_SEED = 5, 42
 
 DEFAULT_LIGHTGBM_PARAMS = dict(objective="binary", learning_rate=0.05, n_estimators=10000, random_state=42, verbose=-1)
-# 04_hyperparameter_tuning で採用した設定(Optunaの試行14の値に、学習率を0.05→0.02に下げたもの)
+# 05_hyperparameter_tuning で採用した設定(Optunaの試行14の値に、学習率を0.05→0.02に下げたもの)
 TUNED_LIGHTGBM_PARAMS = {**DEFAULT_LIGHTGBM_PARAMS, "num_leaves": 61, "min_child_samples": 5, "reg_lambda": 29.265955275846228,
                          "reg_alpha": 0.3399216318523539, "min_split_gain": 0.34853053056853356, "max_bin": 511,
                          "subsample": 0.9039977941161244, "subsample_freq": 1, "colsample_bytree": 0.5146287416154858, "learning_rate": 0.02}
 DEFAULT_XGBOOST_PARAMS = dict(learning_rate=0.05, n_estimators=10000, early_stopping_rounds=100, tree_method="hist",
                               enable_categorical=True, eval_metric="auc", random_state=42, n_jobs=-1)
-# 04_hyperparameter_tuning で採用した設定(Optunaの試行35の値)
+# 05_hyperparameter_tuning で採用した設定(Optunaの試行35の値)
 TUNED_XGBOOST_PARAMS = {**DEFAULT_XGBOOST_PARAMS, "max_depth": 10, "min_child_weight": 23.27750908295225, "reg_lambda": 17.154422085714742,
                         "reg_alpha": 0.10595012492749806, "gamma": 0.09813717336201243, "max_bin": 1023,
                         "subsample": 0.9653056625598389, "colsample_bytree": 0.4517043587579834}

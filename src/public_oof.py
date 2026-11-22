@@ -1,4 +1,4 @@
-"""公開OOF(他の参加者が公開した、OOFとtestの予測のセット)の点検・形の統一・系統分け。notebooks/06_public_oof_stacking から使う。
+"""公開OOF(他の参加者が公開した、OOFとtestの予測のセット)の点検・形の統一・系統分け。notebooks/07_public_oof_stacking から使う。
 
 公開OOFのファイル自体は他の参加者の成果物なので、このリポジトリには含めない。取得先は public_oof_sources.csv・late_public_oof_extraction.csv。
 そろえた後の形は <フォルダ>/oof_<名前>.npy・test_<名前>.npy(行の順は train.csv・test.csv と同じ)。

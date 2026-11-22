@@ -1,4 +1,4 @@
-"""CatBoost(全特徴量をカテゴリ扱い)のハイパラを、KaggleのGPUでOptunaにより探す(notebooks/04_hyperparameter_tuning の3節)。
+"""CatBoost(全特徴量をカテゴリ扱い)のハイパラを、KaggleのGPUでOptunaにより探す(notebooks/05_hyperparameter_tuning の3節)。
 
 - データ・値ごとの満足率の置き換え・全特徴量のカテゴリ化は train_catboost.py と同じ。分け方はseed 42の5分割、学習率0.05、早期停止100本。
 - 探すハイパラ: depth 4〜10・l2_leaf_reg 1〜30・border_count 32/64/128/254・random_strength 0.1〜10・bagging_temperature 0〜1・

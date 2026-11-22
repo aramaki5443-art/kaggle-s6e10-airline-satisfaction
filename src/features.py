@@ -1,7 +1,7 @@
 """特徴量の定義: データの読み込み、元の特徴量の一覧、採用した13種類(16個)の特徴量の作り方、Target Encoding。
 
 ノートブック(notebooks/)から読み込んで使う。採用した特徴量を考えた順に、仮説・確認・結果と一緒に追うには
-notebooks/02_feature_engineering.ipynb を見る(最後のセルで、このファイルと同じ値になることを照合している)。
+notebooks/03_feature_engineering.ipynb を見る(最後のセルで、このファイルと同じ値になることを照合している)。
 
 - FEATURE_BUILDERS: 特徴量の名前 → 関数(データを受け取り、足す列を返す)。
 - ADOPTED_FEATURES: 採用した順の名前。モデルは元の特徴量20個(BASE_FEATURES)+ADOPTED_FEATURESで学習する。
@@ -58,7 +58,7 @@ def comfort_business_travel(df):
 
 
 def comfort_loyal_business_travel(df):
-    """常連かつ出張客だけ快適さを持つ。常連でない客は快適さが効かない(EDA 6節)。"""
+    """常連かつ出張客だけ快適さを持つ。常連でない客は快適さが効かない(EDA 5節)。"""
     loyal_business = (df["Type of Travel"] == "Business travel") & (df["Customer Type"] == "Loyal Customer")
     return pd.DataFrame({"comfort_loyal_business_travel": comfort(df).where(loyal_business)})
 

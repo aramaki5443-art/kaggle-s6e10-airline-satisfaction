@@ -1,6 +1,6 @@
-"""CatBoostをKaggleのGPUで5分割学習し、OOFとtestの予測を保存する(notebooks/03_modeling・04_hyperparameter_tuning で読み込む)。
+"""CatBoostをKaggleのGPUで5分割学習し、OOFとtestの予測を保存する(notebooks/04_modeling・05_hyperparameter_tuning で読み込む)。
 
-- 入力: notebooks/03_modeling で書き出した data/features36_train.csv・features36_test.csv(36個の特徴量。値ごとの満足率の2列はキーのまま)。
+- 入力: notebooks/04_modeling で書き出した data/features36_train.csv・features36_test.csv(36個の特徴量。値ごとの満足率の2列はキーのまま)。
   Kaggleでは、このCSVとこのスクリプトを非公開のデータセットにまとめて読み込ませる。
 - 値ごとの満足率の2列は、foldごとに答えを見ない値へ置き換える(target_encode・target_encode_in_folds は src/features.py と同じ処理)。
 - 元の特徴量20個はすべて文字列にしてカテゴリ扱いにする("allcat"。公開ノートブックの「全特徴量をカテゴリ扱い」を切り分けて採用、+0.000187)。
