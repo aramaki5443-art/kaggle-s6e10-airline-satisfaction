@@ -9,7 +9,7 @@
 | 項目 | 内容 |
 |---|---|
 | コンペ | [Kaggle Playground Series S6E10「Predicting Airline Satisfaction」](https://www.kaggle.com/competitions/playground-series-s6e10)(2026年10月) |
-| 課題 | 年齢・座席クラス・旅行目的・飛行距離・遅延・サービス評価13項目から、乗客が満足したかを当てる二値分類 |
+| 課題 | Age・Class・Type of Travel・Flight Distance・遅延・サービス評価13項目から、乗客が満足したかを当てる二値分類 |
 | データ | 人工データ。train 699,635行・test 299,844行。満足の割合は約44% |
 | 評価指標 | AUC(満足の客を不満の客より上位に並べられたか。1に近いほど良い) |
 | 最終スコア | OOF AUC 0.962266 / Public LB 0.96182 / **Private LB 0.96239(52位 / 3,748チーム)** |
@@ -32,10 +32,10 @@ EDAで客層ごとの偏りを調べたあと、LightGBMで特徴量を1つず�
 
 | No. | ノートブック | 内容 | 主な成果 |
 |---|---|---|---|
-| 00 | [Baseline](notebooks/00_baseline.ipynb) | 元の特徴量21個を単変量AUCの高い順に1つずつ足し、LightGBMの土台を決める | 性別を除く20個。OOF 0.95846 |
+| 00 | [Baseline](notebooks/00_baseline.ipynb) | 元の特徴量21個を単変量AUCの高い順に1つずつ足し、LightGBMの土台を決める | Genderを除く20個。OOF 0.95846 |
 | 01 | [EDA](notebooks/01_EDA.ipynb) | 全体像から生まれた2つの仮説(客層の違い・0点の意味)をEDAで確かめ、特徴量を作る | 「私用客は評価に関係なく満足率約10%」→ ゲート特徴量の着想 |
-| 02 | [Preprocessing](notebooks/02_preprocessing.ipynb) | 欠損値の扱い、カテゴリ変数の渡し方、エンコーディングの比較 | 欠損(0.04%)は補完しない。カテゴリはcategory型のまま |
-| 03 | [Feature Engineering](notebooks/03_feature_engineering.ipynb) | 採用した13種類の仮説・確認・コード、採否の基準、不採用169個の一覧、SHAP | OOF 0.95846 → 0.96046 |
+| 02 | [Preprocessing](notebooks/02_preprocessing.ipynb) | 欠損値の扱い、カテゴリ変数の型 | 欠損(0.04%)は補完しない。カテゴリはstr型からcategory型に変換 |
+| 03 | [Feature Engineering](notebooks/03_feature_engineering.ipynb) | 採用した13種類の仮説・確認・コード、エンコーディングの比較、採否の基準、不採用169個の一覧、SHAP | OOF 0.95846 → 0.96046 |
 | 04 | [Modeling](notebooks/04_modeling.ipynb) | XGBoost・CatBoost・RealMLP・TabPFNを作り、単体の強さと予測の似かたを比べる | 5モデルとも0.9604〜0.9612、木どうしだけが似ている |
 | 05 | [Hyperparameter Tuning](notebooks/05_hyperparameter_tuning.ipynb) | Optunaで木の3モデルを調整し、混ぜたときの伸びを確かめる | 単体の伸びは、混ぜると約1/9に縮む |
 | 06 | [Ensemble](notebooks/06_ensemble.ipynb) | 5モデルを2段目のロジスティック回帰で混ぜ、1モデルずつ抜いて役割を確かめる | OOF 0.961685 |
@@ -43,7 +43,7 @@ EDAで客層ごとの偏りを調べたあと、LightGBMで特徴量を1つず�
 
 ### 特徴量エンジニアリングとアンサンブルの要点
 
-- **特徴量:** 採用した16個は、①条件で絞る(出張客の快適さなど)、②似た乗客で数える・平均する(飛行距離の値ごとの満足率など)、③モデルで予想する(サービス評価の期待値)の3種類。最大の改善は飛行距離の値ごとの満足率(+0.00136)。不採用169個も含めた一覧は[03](notebooks/03_feature_engineering.ipynb)。
+- **特徴量:** 採用した16個は、①条件で絞る(出張客の快適さなど)、②似た乗客で数える・平均する(Flight Distanceの値ごとの満足率など)、③モデルで予想する(サービス評価の期待値)の3種類。最大の改善はFlight Distanceの値ごとの満足率(+0.00136)。不採用169個も含めた一覧は[03](notebooks/03_feature_engineering.ipynb)。
 - **アンサンブル:** 5モデルの単体のOOF AUCは0.9608〜0.9612とほぼ同じだった。木どうしの順位相関は0.98〜0.99と高く、TabPFNはほかの4モデルと0.96台と低い。2段目の係数はTabPFN 0.42・RealMLP 0.35で、木と違う予測をするモデルが重く使われた([06](notebooks/06_ensemble.ipynb))。
 
 ## スコア推移

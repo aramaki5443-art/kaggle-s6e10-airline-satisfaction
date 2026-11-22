@@ -20,14 +20,14 @@ from sklearn.model_selection import KFold, StratifiedKFold
 DATA_DIR = Path(os.environ.get("AIRLINE_DATA_DIR", Path(__file__).resolve().parents[1] / "data"))
 TARGET = "satisfaction"
 
-ORIGINAL_FEATURES_BY_UNIVARIATE_AUC = [  # 元の特徴量21個。EDA 1節の「値ごとの満足率」の単変量AUCの高い順
+ORIGINAL_FEATURES_BY_UNIVARIATE_AUC = [  # 元の特徴量21個。00_baselineの2節の「値ごとの満足率」の単変量AUCの高い順
     "Online boarding", "Class", "Inflight entertainment", "Inflight wifi service", "Seat comfort",
     "Flight Distance", "Type of Travel", "On-board service", "Cleanliness", "Leg room service", "Age",
     "Ease of Online booking", "Baggage handling", "Checkin service", "Food and drink", "Gate location",
     "Customer Type", "Departure/Arrival time convenient", "Arrival Delay in Minutes",
     "Departure Delay in Minutes", "Gender",
 ]
-BASE_FEATURES = ORIGINAL_FEATURES_BY_UNIVARIATE_AUC[:20]  # ベースラインで選んだ20個(性別を除く)
+BASE_FEATURES = ORIGINAL_FEATURES_BY_UNIVARIATE_AUC[:20]  # ベースラインで選んだ20個(Genderを除く)
 CATEGORICAL_COLUMNS = ["Gender", "Customer Type", "Type of Travel", "Class"]
 SERVICE_RATINGS = ["Inflight wifi service", "Departure/Arrival time convenient", "Ease of Online booking", "Gate location",
                    "Food and drink", "Online boarding", "Seat comfort", "Inflight entertainment", "On-board service",
@@ -48,7 +48,7 @@ def read_train_and_test_columns(columns):
 # ① 条件で絞る(ゲート特徴量): 点数が効く客層だけに値を持たせ、ほかの客は空欄(欠損)にする
 
 def comfort(df):
-    """機内の快適さ = 座席・足元の広さ・機内エンタメの点数の平均(0点は「評価なし」の可能性があるので除く)。"""
+    """機内の快適さ = Seat comfort・Leg room service・Inflight entertainmentの点数の平均(0点は「評価なし」の可能性があるので除く)。"""
     return df[COMFORT_RATINGS].replace(0, np.nan).mean(axis=1)
 
 
@@ -58,13 +58,13 @@ def comfort_business_travel(df):
 
 
 def comfort_loyal_business_travel(df):
-    """常連かつ出張客だけ快適さを持つ。常連でない客は快適さが効かない(EDA 5節)。"""
+    """常連かつ出張客だけ快適さを持つ。常連でない客は快適さが効かない(EDA 4節)。"""
     loyal_business = (df["Type of Travel"] == "Business travel") & (df["Customer Type"] == "Loyal Customer")
     return pd.DataFrame({"comfort_loyal_business_travel": comfort(df).where(loyal_business)})
 
 
 def onboard_service_business_travel(df):
-    """出張客だけ機内サービスの点数を持つ(単変量AUC 出張客0.759、私用客0.509)。"""
+    """出張客だけOn-board serviceの点数を持つ(単変量AUC 出張客0.759、私用客0.509)。"""
     return pd.DataFrame({"onboard_service_business_travel": df["On-board service"].where(df["Type of Travel"] == "Business travel")})
 
 
@@ -111,14 +111,14 @@ def target_encode_in_folds(X_fit, y_fit, others, seed):
 
 
 def distance_travel_type_count(df):
-    """同じ飛行距離・同じ旅行目的の乗客が、train+testに何人いるか(答えは使わない)。"""
+    """同じFlight Distance・同じType of Travelの乗客が、train+testに何人いるか(答えは使わない)。"""
     columns = ["Flight Distance", "Type of Travel"]
     counts = read_train_and_test_columns(columns).fillna(-1).astype(str).agg("|".join, axis=1).value_counts()
     return pd.DataFrame({"distance_travel_type_count": df[columns].fillna(-1).astype(str).agg("|".join, axis=1).map(counts).values}, index=df.index)
 
 
 def route_statistic(name, column, statistic):
-    """飛行距離の値を路線とみなし、train+testで同じ距離の乗客の column の平均(mean)または標準偏差(std)を入れる。"""
+    """Flight Distanceの値を路線とみなし、train+testで同じFlight Distanceの乗客の column の平均(mean)または標準偏差(std)を入れる。"""
     def build(df):
         train_and_test = read_train_and_test_columns(["Flight Distance", column])
         by_route = train_and_test.groupby("Flight Distance")[column].agg(statistic)
@@ -126,13 +126,13 @@ def route_statistic(name, column, statistic):
     return build
 
 
-GROUP_KEYS = ["Class", "Type of Travel", "Customer Type"]  # 座席クラス×旅行目的×常連かどうかの12グループ
+GROUP_KEYS = ["Class", "Type of Travel", "Customer Type"]  # Class×Type of Travel×Customer Typeの12グループ
 GROUP_DEVIATION_COLUMNS = {"age": "Age", "flight_distance": "Flight Distance",
                            "departure_delay": "Departure Delay in Minutes", "arrival_delay": "Arrival Delay in Minutes"}
 
 
 def group_deviation(df):
-    """自分の値 − 同じ客層グループの平均(train+testで計算)を、年齢・飛行距離・遅延2つの4列で入れる。"""
+    """自分の値 − 同じ客層グループの平均(train+testで計算)を、Age・Flight Distance・遅延2つの4列で入れる。"""
     train_and_test = read_train_and_test_columns(GROUP_KEYS + list(GROUP_DEVIATION_COLUMNS.values()))
     new_columns = {}
     for short_name, column in GROUP_DEVIATION_COLUMNS.items():

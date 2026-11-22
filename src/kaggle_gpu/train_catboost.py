@@ -5,7 +5,7 @@
 - 値ごとの満足率の2列は、foldごとに答えを見ない値へ置き換える(target_encode・target_encode_in_folds は src/features.py と同じ処理)。
 - 元の特徴量20個はすべて文字列にしてカテゴリ扱いにする("allcat"。公開ノートブックの「全特徴量をカテゴリ扱い」を切り分けて採用、+0.000187)。
 - 学習率0.05、木の本数は検証foldでの早期停止(100本)。TUNED_PARAMS は tune_catboost.py の最良の試行(#21)。
-- RUNS の各行(名前, fold分割のseed, 元の特徴量20個だけか, 上書きするハイパラ, 距離・カテゴリの扱い)を順に学習する。
+- RUNS の各行(名前, fold分割のseed, 元の特徴量20個だけか, 上書きするハイパラ, Flight Distance・カテゴリの扱い)を順に学習する。
   --run 名前 で1行だけ学習できる(最終提出で使ったのは allcat_t21_cv42 → data/oof_catboost_tuned.npy に置く)。
 - 手元で動かすと(/kaggle/input が無いとき)、data/ を読みCPUで学習する。GPUとは計算の仕方が違うので結果も変わり、数時間かかる。
 """
@@ -76,7 +76,7 @@ for tag, cv_seed, raw_only, param_overrides, distance_mode in RUNS:
         X = X.assign(**{c: X[c].fillna(-1).astype(str) for c in base_cols})
         X_test = X_test.assign(**{c: X_test[c].fillna(-1).astype(str) for c in base_cols})
         cat_features = base_cols
-    elif distance_mode:  # 距離をカテゴリ列にする(CatBoostのカテゴリ列は文字列か整数で渡す)
+    elif distance_mode:  # Flight Distanceをカテゴリ列にする(CatBoostのカテゴリ列は文字列か整数で渡す)
         col = "dist_cat" if distance_mode == "add" else "Flight Distance"
         X = X.assign(**{col: X["Flight Distance"].astype(str)})
         X_test = X_test.assign(**{col: X_test["Flight Distance"].astype(str)})
